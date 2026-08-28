@@ -362,9 +362,6 @@ const limitador =
 // SESIONES
 // ============================================================
 
-const sesiones =
-  new Map();
-
 function obtenerSesion(
   sessionId,
   modo
