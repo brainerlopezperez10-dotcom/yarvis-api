@@ -2161,3 +2161,715 @@ app.get(
 // FIN DE LA PARTE 4
 // ============================================================
 
+// ============================================================
+// PARTE 5 — SISTEMA DE VOZ DE YARVIS
+// AUDIO -> TEXTO
+// TEXTO -> AUDIO
+// ============================================================
+
+
+// ============================================================
+// TRANSCRIPCIÓN DE AUDIO
+// ============================================================
+
+app.post(
+  '/transcribir',
+  limitador,
+  async (req, res) => {
+
+    let rutaTemporal = null;
+
+    try {
+
+      const {
+        audio,
+        mimeType = 'audio/webm'
+      } = req.body;
+
+
+      // ------------------------------------------------------
+      // COMPROBAR AUDIO
+      // ------------------------------------------------------
+
+      if (!audio) {
+
+        return res
+          .status(400)
+          .json({
+            error:
+              'Envía el audio en base64.'
+          });
+
+      }
+
+
+      // ------------------------------------------------------
+      // COMPROBAR TAMAÑO
+      // ------------------------------------------------------
+
+      const bytesAprox =
+        Buffer.byteLength(
+          audio,
+          'base64'
+        );
+
+
+      if (
+        bytesAprox >
+        MAX_AUDIO_BYTES
+      ) {
+
+        return res
+          .status(400)
+          .json({
+            error:
+              'El audio supera el límite de 15MB.'
+          });
+
+      }
+
+
+      // ------------------------------------------------------
+      // DETERMINAR EXTENSIÓN
+      // ------------------------------------------------------
+
+      let extension = 'webm';
+
+
+      if (
+        mimeType.includes('mp3')
+      ) {
+
+        extension = 'mp3';
+
+      }
+
+      else if (
+        mimeType.includes('wav')
+      ) {
+
+        extension = 'wav';
+
+      }
+
+      else if (
+        mimeType.includes('mp4')
+      ) {
+
+        extension = 'mp4';
+
+      }
+
+
+      // ------------------------------------------------------
+      // CREAR ARCHIVO TEMPORAL
+      // ------------------------------------------------------
+
+      rutaTemporal =
+        path.join(
+          os.tmpdir(),
+          `yarvis_${crypto.randomUUID()}.${extension}`
+        );
+
+
+      fs.writeFileSync(
+        rutaTemporal,
+        Buffer.from(
+          audio,
+          'base64'
+        )
+      );
+
+
+      // ------------------------------------------------------
+      // ENVIAR AUDIO A WHISPER
+      // ------------------------------------------------------
+
+      const transcripcion =
+        await groq.audio.transcriptions.create({
+
+          file:
+            fs.createReadStream(
+              rutaTemporal
+            ),
+
+          model:
+            MODELO_STT
+
+        });
+
+
+      // ------------------------------------------------------
+      // RESPONDER AL CLIENTE
+      // ------------------------------------------------------
+
+      res.json({
+
+        texto:
+          transcripcion.text ||
+          ''
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        '❌ Error STT:',
+        error.message
+      );
+
+
+      res
+        .status(500)
+        .json({
+
+          error:
+            'No se pudo transcribir el audio.'
+
+        });
+
+    }
+
+    finally {
+
+      // ------------------------------------------------------
+      // BORRAR ARCHIVO TEMPORAL
+      // ------------------------------------------------------
+
+      if (
+        rutaTemporal &&
+        fs.existsSync(
+          rutaTemporal
+        )
+      ) {
+
+        try {
+
+          fs.unlinkSync(
+            rutaTemporal
+          );
+
+        }
+
+        catch (error) {
+
+          console.error(
+            'Error eliminando audio temporal:',
+            error.message
+          );
+
+        }
+
+      }
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// TEXTO -> VOZ
+// ============================================================
+
+app.post(
+  '/hablar',
+  limitador,
+  async (req, res) => {
+
+    try {
+
+      const {
+        texto,
+        voice
+      } = req.body;
+
+
+      // ------------------------------------------------------
+      // VALIDAR TEXTO
+      // ------------------------------------------------------
+
+      if (
+        !texto ||
+        typeof texto !== 'string' ||
+        !texto.trim()
+      ) {
+
+        return res
+          .status(400)
+          .json({
+
+            error:
+              'Envía un texto.'
+
+          });
+
+      }
+
+
+      // ------------------------------------------------------
+      // LÍMITE DE TEXTO
+      // ------------------------------------------------------
+
+      if (
+        texto.length >
+        2000
+      ) {
+
+        return res
+          .status(400)
+          .json({
+
+            error:
+              'El texto es demasiado largo. Máximo 2000 caracteres.'
+
+          });
+
+      }
+
+
+      // ------------------------------------------------------
+      // VOCES PERMITIDAS
+      // ------------------------------------------------------
+
+      const VOCES_PERMITIDAS = [
+
+        'Aaliyah-PlayAI',
+
+        'Arista-PlayAI',
+
+        'Atlas-PlayAI',
+
+        'Briggs-PlayAI',
+
+        'Calum-PlayAI',
+
+        'Celeste-PlayAI',
+
+        'Cheyenne-PlayAI',
+
+        'Deedee-PlayAI',
+
+        'Fritz-PlayAI',
+
+        'Gail-PlayAI',
+
+        'Indigo-PlayAI',
+
+        'Mason-PlayAI',
+
+        'Mitch-PlayAI',
+
+        'Quinn-PlayAI',
+
+        'Thunder-PlayAI'
+
+      ];
+
+
+      const vozElegida =
+        VOCES_PERMITIDAS.includes(
+          voice
+        )
+          ? voice
+          : VOZ_TTS;
+
+
+      // ------------------------------------------------------
+      // SOLICITUD A GROQ
+      // ------------------------------------------------------
+
+      const respuestaGroq =
+        await fetch(
+          'https://api.groq.com/openai/v1/audio/speech',
+          {
+
+            method:
+              'POST',
+
+            headers: {
+
+              Authorization:
+                `Bearer ${GROQ_API_KEY}`,
+
+              'Content-Type':
+                'application/json'
+
+            },
+
+            body:
+              JSON.stringify({
+
+                model:
+                  MODELO_TTS,
+
+                input:
+                  texto.trim(),
+
+                voice:
+                  vozElegida,
+
+                response_format:
+                  'mp3'
+
+              })
+
+          }
+        );
+
+
+      // ------------------------------------------------------
+      // COMPROBAR RESPUESTA
+      // ------------------------------------------------------
+
+      if (
+        !respuestaGroq.ok
+      ) {
+
+        const detalle =
+          await respuestaGroq.text();
+
+
+        console.error(
+          '❌ Error Groq TTS:',
+          detalle
+        );
+
+
+        throw new Error(
+          'Groq no pudo generar el audio.'
+        );
+
+      }
+
+
+      // ------------------------------------------------------
+      // CONVERTIR AUDIO A BASE64
+      // ------------------------------------------------------
+
+      const arrayBuffer =
+        await respuestaGroq.arrayBuffer();
+
+
+      const audioBase64 =
+        Buffer
+          .from(arrayBuffer)
+          .toString('base64');
+
+
+      // ------------------------------------------------------
+      // ENVIAR AUDIO
+      // ------------------------------------------------------
+
+      res.json({
+
+        audio:
+          audioBase64,
+
+        mimeType:
+          'audio/mpeg',
+
+        voice:
+          vozElegida
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        '❌ Error TTS:',
+        error.message
+      );
+
+
+      res
+        .status(500)
+        .json({
+
+          error:
+            'No se pudo generar la voz de Yarvis.'
+
+        });
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// FIN DE LA PARTE 5
+// ============================================================
+
+// ============================================================
+// PARTE 6 — ARRANQUE FINAL DE YARVIS
+// ============================================================
+
+
+// ============================================================
+// INFORMACIÓN DEL SERVIDOR
+// ============================================================
+
+app.get(
+  '/api',
+  (req, res) => {
+
+    res.json({
+
+      ia: NOMBRE_IA,
+
+      estado:
+        'online',
+
+      mensaje:
+        'Yarvis está funcionando correctamente.',
+
+      funciones: [
+
+        'chat',
+
+        'memoria',
+
+        'conversaciones',
+
+        'imagenes',
+
+        'busqueda-web',
+
+        'voz',
+
+        'transcripcion',
+
+        'modo-asistente',
+
+        'modo-explicativo',
+
+        'modo-creativo',
+
+        'modo-programador',
+
+        'modo-investigador'
+
+      ]
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// RUTA 404 PARA API
+// ============================================================
+
+app.use(
+  (req, res, next) => {
+
+    // Si es una petición de API,
+    // devolver JSON en lugar de HTML.
+
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/chat') ||
+      req.path.startsWith('/memory') ||
+      req.path.startsWith('/conversations') ||
+      req.path.startsWith('/transcribir') ||
+      req.path.startsWith('/hablar') ||
+      req.path.startsWith('/reset')
+    ) {
+
+      return res
+        .status(404)
+        .json({
+
+          error:
+            'Ruta no encontrada.'
+
+        });
+
+    }
+
+    next();
+
+  }
+);
+
+
+// ============================================================
+// MANEJADOR GENERAL DE ERRORES
+// ============================================================
+
+app.use(
+  (
+    error,
+    req,
+    res,
+    next
+  ) => {
+
+    console.error(
+      '❌ Error del servidor:',
+      error.message
+    );
+
+
+    if (
+      res.headersSent
+    ) {
+
+      return next(
+        error
+      );
+
+    }
+
+
+    res
+      .status(
+        error.status || 500
+      )
+      .json({
+
+        error:
+          'Error interno del servidor.'
+
+      });
+
+  }
+);
+
+
+// ============================================================
+// ARRANCAR SERVIDOR
+// ============================================================
+
+const server =
+  app.listen(
+    PORT,
+    () => {
+
+      console.log(
+        '========================================'
+      );
+
+      console.log(
+        `🤖 ${NOMBRE_IA} iniciado correctamente`
+      );
+
+      console.log(
+        `🚀 Puerto: ${PORT}`
+      );
+
+      console.log(
+        `🧠 Modelo: ${MODELO_TEXTO}`
+      );
+
+      console.log(
+        '🔎 Búsqueda web: Tavily'
+      );
+
+      console.log(
+        '👁️ Visión: activada'
+      );
+
+      console.log(
+        '🎙️ Transcripción: activada'
+      );
+
+      console.log(
+        '🔊 Voz: activada'
+      );
+
+      console.log(
+        '💾 Memoria: activada'
+      );
+
+      console.log(
+        '========================================'
+
+      );
+
+    }
+  );
+
+
+// ============================================================
+// CIERRE SEGURO
+// ============================================================
+
+function cerrarServidor(
+  señal
+) {
+
+  console.log(
+    `📴 Recibida señal ${señal}. Cerrando Yarvis...`
+  );
+
+
+  server.close(
+    () => {
+
+      console.log(
+        '✅ Servidor cerrado correctamente.'
+      );
+
+      process.exit(
+        0
+      );
+
+    }
+  );
+
+
+  // Si tarda demasiado,
+  // forzamos el cierre.
+
+  setTimeout(
+    () => {
+
+      console.error(
+        '⚠️ Cierre forzado del servidor.'
+      );
+
+      process.exit(
+        1
+      );
+
+    },
+    10000
+  );
+
+}
+
+
+process.on(
+  'SIGTERM',
+  () => {
+
+    cerrarServidor(
+      'SIGTERM'
+    );
+
+  }
+);
+
+
+process.on(
+  'SIGINT',
+  () => {
+
+    cerrarServidor(
+      'SIGINT'
+    );
+
+  }
+);
+
+
+// ============================================================
+// FIN DEL SERVER.JS
+// ============================================================
