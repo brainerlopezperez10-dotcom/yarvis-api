@@ -501,11 +501,6 @@ const MEMORY_FILE =
     'memory.json'
   );
 
-const CHATS_FILE =
-  path.join(
-    DATA_DIR,
-    'chats.json'
-  );
 
 function cargarJSON(
   archivo,
