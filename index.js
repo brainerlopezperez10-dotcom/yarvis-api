@@ -1615,3 +1615,407 @@ app.post(
 // ============================================================
 // FIN DE LA PARTE 2
 // ============================================================
+// ============================================================
+// PARTE 3 — VOZ, ARCHIVOS Y ARRANQUE DE YARVIS
+// ============================================================
+
+
+// ────────────────────────────────────────────────────────────
+// TEXTO → VOZ
+// ────────────────────────────────────────────────────────────
+
+app.post(
+  '/hablar',
+  limitador,
+  async (req, res) => {
+
+    try {
+
+      const {
+        texto,
+        voice
+      } = req.body;
+
+
+      if (
+        !texto ||
+        typeof texto !== 'string' ||
+        !texto.trim()
+      ) {
+
+        return res
+          .status(400)
+          .json({
+            error: 'Envía un texto.'
+          });
+
+      }
+
+
+      if (
+        texto.length > 2000
+      ) {
+
+        return res
+          .status(400)
+          .json({
+            error:
+              'El texto es demasiado largo (máximo 2000 caracteres).'
+          });
+
+      }
+
+
+      const voz =
+        typeof voice === 'string' &&
+        voice.trim()
+          ? voice.trim()
+          : VOZ_TTS;
+
+
+      const respuestaGroq =
+        await fetch(
+          'https://api.groq.com/openai/v1/audio/speech',
+          {
+
+            method: 'POST',
+
+            headers: {
+              Authorization:
+                `Bearer ${GROQ_API_KEY}`,
+
+              'Content-Type':
+                'application/json'
+            },
+
+            body: JSON.stringify({
+
+              model:
+                MODELO_TTS,
+
+              input:
+                texto.trim(),
+
+              voice:
+                voz,
+
+              response_format:
+                'mp3'
+
+            })
+
+          }
+        );
+
+
+      if (
+        !respuestaGroq.ok
+      ) {
+
+        const detalle =
+          await respuestaGroq.text();
+
+
+        console.error(
+          '❌ Error Groq TTS:',
+          respuestaGroq.status,
+          detalle
+        );
+
+
+        return res
+          .status(500)
+          .json({
+            error:
+              'Groq no pudo generar la voz.'
+          });
+
+      }
+
+
+      const arrayBuffer =
+        await respuestaGroq.arrayBuffer();
+
+
+      const audioBase64 =
+        Buffer
+          .from(arrayBuffer)
+          .toString('base64');
+
+
+      res.json({
+
+        audio:
+          audioBase64,
+
+        mimeType:
+          'audio/mpeg',
+
+        voice:
+          voz
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        '❌ Error en /hablar:',
+        error.message
+      );
+
+
+      res
+        .status(500)
+        .json({
+
+          error:
+            'No se pudo generar el audio.'
+
+        });
+
+    }
+
+  }
+);
+
+
+// ────────────────────────────────────────────────────────────
+// INFORMACIÓN DEL SERVIDOR
+// ────────────────────────────────────────────────────────────
+
+app.get(
+  '/info',
+  (req, res) => {
+
+    res.json({
+
+      ia:
+        NOMBRE_IA,
+
+      version:
+        '2.0.0',
+
+      modelos: {
+
+        texto:
+          MODELO_TEXTO,
+
+        vision:
+          MODELO_VISION,
+
+        busqueda:
+          MODELO_BUSQUEDA,
+
+        vozTexto:
+          MODELO_STT,
+
+        textoVoz:
+          MODELO_TTS
+
+      },
+
+      funciones: [
+
+        'chat',
+
+        'memoria',
+
+        'vision',
+
+        'busqueda',
+
+        'voz',
+
+        'texto-a-voz',
+
+        'voz-a-texto',
+
+        'historial',
+
+        'conversaciones'
+
+      ]
+
+    });
+
+  }
+);
+
+
+// ────────────────────────────────────────────────────────────
+// PÁGINA PRINCIPAL
+// ────────────────────────────────────────────────────────────
+
+app.get(
+  '/',
+  (req, res) => {
+
+    res.sendFile(
+      path.join(
+        __dirname,
+        'public',
+        'index.html'
+      )
+    );
+
+  }
+);
+
+
+// ────────────────────────────────────────────────────────────
+// MANEJO DE RUTAS NO ENCONTRADAS
+// ────────────────────────────────────────────────────────────
+
+app.use(
+  (req, res) => {
+
+    res
+      .status(404)
+      .json({
+
+        error:
+          'Ruta no encontrada.',
+
+        ia:
+          NOMBRE_IA
+
+      });
+
+  }
+);
+
+
+// ────────────────────────────────────────────────────────────
+// MANEJO GLOBAL DE ERRORES
+// ────────────────────────────────────────────────────────────
+
+app.use(
+  (error, req, res, next) => {
+
+    console.error(
+      '❌ Error global:',
+      error.message
+    );
+
+
+    if (
+      res.headersSent
+    ) {
+
+      return next(
+        error
+      );
+
+    }
+
+
+    res
+      .status(500)
+      .json({
+
+        error:
+          'Error interno del servidor.'
+
+      });
+
+  }
+);
+
+
+// ============================================================
+// ARRANQUE DEL SERVIDOR
+// ============================================================
+
+const server =
+  app.listen(
+    PORT,
+    '0.0.0.0',
+    () => {
+
+      console.log(
+        `🚀 ${NOMBRE_IA} iniciado correctamente.`
+      );
+
+      console.log(
+        `🌐 Puerto: ${PORT}`
+      );
+
+      console.log(
+        `🧠 Modelo: ${MODELO_TEXTO}`
+      );
+
+      console.log(
+        `👁️ Visión: activada`
+      );
+
+      console.log(
+        `🎤 Voz: activada`
+      );
+
+      console.log(
+        `💾 Memoria: activada`
+      );
+
+    }
+  );
+
+
+// ============================================================
+// CIERRE ORDENADO
+// ============================================================
+
+function cerrarServidor(
+  señal
+) {
+
+  console.log(
+    `📴 Recibida señal ${señal}. Cerrando servidor...`
+  );
+
+
+  server.close(
+    () => {
+
+      console.log(
+        '✅ Servidor cerrado correctamente.'
+      );
+
+      process.exit(
+        0
+      );
+
+    }
+  );
+
+
+  setTimeout(
+    () => {
+
+      process.exit(
+        1
+      );
+
+    },
+    10000
+  );
+
+}
+
+
+process.on(
+  'SIGTERM',
+  () => cerrarServidor('SIGTERM')
+);
+
+
+process.on(
+  'SIGINT',
+  () => cerrarServidor('SIGINT')
+);
+
+
+// ============================================================
+// FIN DE SERVER.JS
+// ============================================================
