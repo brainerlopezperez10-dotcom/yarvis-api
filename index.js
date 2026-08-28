@@ -574,12 +574,6 @@ function guardarJSON(
 
 }
 
-let memoria =
-  cargarJSON(
-    MEMORY_FILE,
-    {}
-  );
-
 let conversaciones =
   cargarJSON(
     CHATS_FILE,
