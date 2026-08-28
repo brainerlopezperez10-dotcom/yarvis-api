@@ -912,21 +912,6 @@ setInterval(() => {
 // CARPETA DE DATOS
 // ============================================================
 
-const DATA_DIR = path.join(
-  __dirname,
-  'data'
-);
-
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, {
-    recursive: true
-  });
-}
-
-const MEMORY_FILE = path.join(
-  DATA_DIR,
-  'memory.json'
-);
 
 const CHATS_FILE = path.join(
   DATA_DIR,
