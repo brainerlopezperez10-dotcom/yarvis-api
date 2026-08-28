@@ -243,7 +243,91 @@ app.use(
       'public'
     )
   )
-);
+);// ============================================================
+// BÚSQUEDA WEB CON TAVILY
+// ============================================================
+
+const TAVILY_API_KEY =
+  process.env.TAVILY_API_KEY;
+
+
+async function buscarEnInternet(pregunta) {
+
+  if (!TAVILY_API_KEY) {
+
+    throw new Error(
+      'Falta TAVILY_API_KEY en Render.'
+    );
+
+  }
+
+
+  const respuesta =
+    await fetch(
+      'https://api.tavily.com/search',
+      {
+
+        method: 'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json'
+        },
+
+        body: JSON.stringify({
+
+          api_key:
+            TAVILY_API_KEY,
+
+          query:
+            pregunta,
+
+          search_depth:
+            'advanced',
+
+          topic:
+            'general',
+
+          max_results:
+            5,
+
+          include_answer:
+            true,
+
+          include_raw_content:
+            false
+
+        })
+
+      }
+    );
+
+
+  if (!respuesta.ok) {
+
+    const errorTexto =
+      await respuesta.text();
+
+    console.error(
+      'Error Tavily:',
+      respuesta.status,
+      errorTexto
+    );
+
+    throw new Error(
+      'Tavily no pudo realizar la búsqueda.'
+    );
+
+  }
+
+
+  const datos =
+    await respuesta.json();
+
+
+  return datos;
+
+  }
 
 
 // ============================================================
