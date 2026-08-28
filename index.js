@@ -1203,3 +1203,961 @@ app.delete(
 // FIN DE LA PARTE 2
 // ==========================================================
 
+// ============================================================
+// PARTE 3 — CEREBRO PRINCIPAL DE YARVIS
+// CHAT + MEMORIA + BÚSQUEDA + IMÁGENES
+// ============================================================
+
+
+// ============================================================
+// PROCESAR RESPUESTA DE YARVIS
+// ============================================================
+
+async function procesarRespuestaIA(
+  mensaje,
+  sessionId,
+  modo = 'asistente',
+  imagen = null,
+  mimeType = null,
+  userId = 'default'
+) {
+
+  const modoFinal =
+    MODOS_VALIDOS.includes(modo)
+      ? modo
+      : 'asistente';
+
+
+  const sesion =
+    obtenerSesion(
+      sessionId,
+      modoFinal
+    );
+
+
+  try {
+
+    // ========================================================
+    // SI HAY IMAGEN
+    // ========================================================
+
+    if (
+      imagen &&
+      mimeType
+    ) {
+
+      const bytes =
+        Buffer.byteLength(
+          imagen,
+          'base64'
+        );
+
+
+      if (
+        bytes >
+        MAX_IMAGEN_BYTES
+      ) {
+
+        throw new Error(
+          'La imagen supera el límite de 8MB.'
+        );
+
+      }
+
+
+      const memoriaTexto =
+        contextoMemoria(
+          userId
+        );
+
+
+      const mensajes = [
+
+        {
+          role: 'system',
+
+          content:
+            (
+              PROMPTS_MODO[
+                modoFinal
+              ] ||
+              PROMPTS_MODO.asistente
+            ) +
+            memoriaTexto
+        },
+
+        {
+          role: 'user',
+
+          content: [
+
+            {
+              type: 'text',
+
+              text:
+                mensaje ||
+                '¿Qué observas en esta imagen?'
+            },
+
+            {
+              type: 'image_url',
+
+              image_url: {
+
+                url:
+                  `data:${mimeType};base64,${imagen}`
+
+              }
+
+            }
+
+          ]
+
+        }
+
+      ];
+
+
+      const completion =
+        await groq.chat.completions.create({
+
+          model:
+            MODELO_VISION,
+
+          messages:
+            mensajes,
+
+          temperature:
+            0.7,
+
+          max_tokens:
+            2048
+
+        });
+
+
+      const respuesta =
+        completion
+          .choices?.[0]
+          ?.message?.content ||
+        'No pude analizar la imagen.';
+
+
+      return respuesta;
+
+    }
+
+
+    // ========================================================
+    // VALIDAR MENSAJE
+    // ========================================================
+
+    if (
+      !mensaje ||
+      typeof mensaje !== 'string'
+    ) {
+
+      throw new Error(
+        'El mensaje está vacío.'
+      );
+
+    }
+
+
+    // ========================================================
+    // MEMORIA
+    // ========================================================
+
+    const memoriaTexto =
+      contextoMemoria(
+        userId
+      );
+
+
+    if (
+      sesion.mensajes[0]
+    ) {
+
+      sesion.mensajes[0].content =
+        (
+          PROMPTS_MODO[
+            modoFinal
+          ] ||
+          PROMPTS_MODO.asistente
+        ) +
+        memoriaTexto;
+
+    }
+
+
+    // ========================================================
+    // BÚSQUEDA TAVILY
+    // ========================================================
+
+    let contextoBusqueda = '';
+
+
+    if (
+      modoFinal === 'busqueda'
+    ) {
+
+      try {
+
+        const resultados =
+          await buscarEnInternet(
+            mensaje
+          );
+
+
+        if (
+          resultados.answer
+        ) {
+
+          contextoBusqueda += `
+
+RESPUESTA DE INTERNET:
+
+${resultados.answer}
+
+`;
+
+        }
+
+
+        if (
+          Array.isArray(
+            resultados.results
+          )
+        ) {
+
+          contextoBusqueda += `
+
+RESULTADOS DE INTERNET:
+
+`;
+
+          resultados.results
+            .slice(0, 5)
+            .forEach(
+              (resultado, index) => {
+
+                contextoBusqueda += `
+
+${index + 1}. ${resultado.title}
+
+URL:
+${resultado.url}
+
+CONTENIDO:
+${resultado.content}
+
+`;
+
+              }
+            );
+
+        }
+
+
+      } catch (error) {
+
+        console.error(
+          '❌ Error en búsqueda:',
+          error.message
+        );
+
+        contextoBusqueda = `
+
+La búsqueda de Internet
+no está disponible en este momento.
+
+Responde utilizando únicamente
+la información que ya conoces.
+`;
+
+      }
+
+    }
+
+
+    // ========================================================
+    // AGREGAR PREGUNTA DEL USUARIO
+    // ========================================================
+
+    sesion.mensajes.push({
+
+      role:
+        'user',
+
+      content:
+        mensaje.trim()
+
+    });
+
+
+    recortarHistorial(
+      sesion
+    );
+
+
+    // ========================================================
+    // SI HAY RESULTADOS DE INTERNET,
+    // SE LOS DAMOS A YARVIS
+    // ========================================================
+
+    if (
+      contextoBusqueda
+    ) {
+
+      sesion.mensajes.push({
+
+        role:
+          'system',
+
+        content:
+          contextoBusqueda
+
+      });
+
+    }
+
+
+    // ========================================================
+    // ELEGIR MODELO
+    // ========================================================
+
+    const modelo =
+      modoFinal === 'busqueda'
+        ? MODELO_TEXTO
+        : MODELO_TEXTO;
+
+
+    // ========================================================
+    // GENERAR RESPUESTA
+    // ========================================================
+
+    const completion =
+      await groq.chat.completions.create({
+
+        model:
+          modelo,
+
+        messages:
+          sesion.mensajes,
+
+        temperature:
+          0.7,
+
+        max_tokens:
+          2048
+
+      });
+
+
+    const respuesta =
+      completion
+        .choices?.[0]
+        ?.message?.content ||
+      'No pude generar una respuesta.';
+
+
+    // ========================================================
+    // GUARDAR RESPUESTA EN HISTORIAL
+    // ========================================================
+
+    sesion.mensajes.push({
+
+      role:
+        'assistant',
+
+      content:
+        respuesta
+
+    });
+
+
+    recortarHistorial(
+      sesion
+    );
+
+
+    // ========================================================
+    // GUARDAR CONVERSACIÓN
+    // ========================================================
+
+    guardarConversacion(
+      userId,
+      sessionId,
+      mensaje.substring(
+        0,
+        60
+      )
+    );
+
+
+    return respuesta;
+
+  } catch (error) {
+
+    console.error(
+      '❌ Error de Yarvis:',
+      error.message
+    );
+
+
+    throw new Error(
+      'Ocurrió un error al generar la respuesta. Intenta de nuevo.'
+    );
+
+  }
+
+}
+
+
+// ============================================================
+// ENDPOINT PRINCIPAL /CHAT
+// ============================================================
+
+app.post(
+  '/chat',
+  limitador,
+  async (
+    req,
+    res
+  ) => {
+
+    try {
+
+      const {
+
+        mensaje,
+
+        sessionId =
+          'web_session',
+
+        modo =
+          'asistente',
+
+        imagen,
+
+        mimeType,
+
+        userId =
+          'default'
+
+      } = req.body;
+
+
+      // ======================================================
+      // VALIDAR MENSAJE
+      // ======================================================
+
+      if (
+        !mensaje &&
+        !imagen
+      ) {
+
+        return res
+          .status(400)
+          .json({
+
+            error:
+              'Envía un mensaje o una imagen.'
+
+          });
+
+      }
+
+
+      // ======================================================
+      // VALIDAR SESIÓN
+      // ======================================================
+
+      if (
+        typeof sessionId !==
+          'string' ||
+        sessionId.length >
+          100
+      ) {
+
+        return res
+          .status(400)
+          .json({
+
+            error:
+              'sessionId inválido.'
+
+          });
+
+      }
+
+
+      // ======================================================
+      // VALIDAR IMAGEN
+      // ======================================================
+
+      if (
+        imagen &&
+        !mimeType
+      ) {
+
+        return res
+          .status(400)
+          .json({
+
+            error:
+              'Falta mimeType para la imagen.'
+
+          });
+
+      }
+
+
+      // ======================================================
+      // PROCESAR
+      // ======================================================
+
+      const respuesta =
+        await procesarRespuestaIA(
+
+          mensaje,
+
+          sessionId,
+
+          modo,
+
+          imagen,
+
+          mimeType,
+
+          userId
+
+        );
+
+
+      // ======================================================
+      // RESPUESTA
+      // ======================================================
+
+      res.json({
+
+        ia:
+          NOMBRE_IA,
+
+        respuesta
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        '❌ Error en /chat:',
+        error.message
+      );
+
+
+      res
+        .status(500)
+        .json({
+
+          error:
+            error.message
+
+        });
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// FIN DE LA PARTE 3
+// ============================================================
+
+// ============================================================
+// PARTE 4 — CONVERSACIONES Y CONTROL DE SESIONES
+// ============================================================
+
+
+// ============================================================
+// LISTAR CONVERSACIONES
+// ============================================================
+
+app.get(
+  '/conversations',
+  limitador,
+  (req, res) => {
+
+    const userId =
+      String(
+        req.query.userId ||
+        'default'
+      );
+
+    res.json({
+
+      conversations:
+        conversaciones[userId] ||
+        []
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// GUARDAR CONVERSACIÓN
+// ============================================================
+
+function guardarConversacion(
+  userId,
+  sessionId,
+  titulo
+) {
+
+  const idUsuario =
+    String(
+      userId ||
+      'default'
+    );
+
+
+  if (
+    !conversaciones[idUsuario]
+  ) {
+
+    conversaciones[idUsuario] =
+      [];
+
+  }
+
+
+  let conversacion =
+    conversaciones[idUsuario]
+      .find(
+        item =>
+          item.id ===
+          sessionId
+      );
+
+
+  // ----------------------------------------------------------
+  // CREAR NUEVA CONVERSACIÓN
+  // ----------------------------------------------------------
+
+  if (
+    !conversacion
+  ) {
+
+    conversacion = {
+
+      id:
+        sessionId,
+
+      title:
+        titulo ||
+        'Nueva conversación',
+
+      createdAt:
+        new Date().toISOString(),
+
+      updatedAt:
+        new Date().toISOString()
+
+    };
+
+
+    conversaciones[idUsuario]
+      .push(
+        conversacion
+      );
+
+  }
+
+
+  // ----------------------------------------------------------
+  // ACTUALIZAR CONVERSACIÓN
+  // ----------------------------------------------------------
+
+  else {
+
+    conversacion.updatedAt =
+      new Date().toISOString();
+
+  }
+
+
+  guardarJSON(
+    CHATS_FILE,
+    conversaciones
+  );
+
+}
+
+
+// ============================================================
+// BORRAR UNA CONVERSACIÓN
+// ============================================================
+
+app.delete(
+  '/conversations/:sessionId',
+  limitador,
+  (
+    req,
+    res
+  ) => {
+
+    const userId =
+      String(
+        req.query.userId ||
+        'default'
+      );
+
+
+    const sessionId =
+      req.params.sessionId;
+
+
+    // --------------------------------------------------------
+    // BORRAR DEL ARCHIVO DE CONVERSACIONES
+    // --------------------------------------------------------
+
+    if (
+      conversaciones[userId]
+    ) {
+
+      conversaciones[userId] =
+        conversaciones[userId]
+          .filter(
+            item =>
+              item.id !==
+              sessionId
+          );
+
+
+      guardarJSON(
+        CHATS_FILE,
+        conversaciones
+      );
+
+    }
+
+
+    // --------------------------------------------------------
+    // BORRAR TAMBIÉN LA SESIÓN ACTIVA
+    // --------------------------------------------------------
+
+    for (
+      const key of sesiones.keys()
+    ) {
+
+      if (
+        key.startsWith(
+          `${sessionId}_`
+        )
+      ) {
+
+        sesiones.delete(
+          key
+        );
+
+      }
+
+    }
+
+
+    res.json({
+
+      ok:
+        true,
+
+      mensaje:
+        'Conversación eliminada.'
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// REINICIAR CONVERSACIÓN ACTUAL
+// ============================================================
+
+app.post(
+  '/reset',
+  limitador,
+  (
+    req,
+    res
+  ) => {
+
+    const {
+
+      sessionId =
+        'web_session',
+
+      modo =
+        'asistente'
+
+    } = req.body;
+
+
+    const key =
+      `${sessionId}_${modo}`;
+
+
+    sesiones.delete(
+      key
+    );
+
+
+    res.json({
+
+      ok:
+        true,
+
+      mensaje:
+        'Conversación reiniciada correctamente.'
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// BORRAR TODAS LAS CONVERSACIONES DE UN USUARIO
+// ============================================================
+
+app.delete(
+  '/conversations',
+  limitador,
+  (
+    req,
+    res
+  ) => {
+
+    const userId =
+      String(
+        req.query.userId ||
+        'default'
+      );
+
+
+    // Borrar conversaciones guardadas
+
+    delete conversaciones[userId];
+
+
+    guardarJSON(
+      CHATS_FILE,
+      conversaciones
+    );
+
+
+    // Borrar sesiones activas
+
+    for (
+      const key of sesiones.keys()
+    ) {
+
+      if (
+        key.startsWith(
+          `${userId}_`
+        )
+      ) {
+
+        sesiones.delete(
+          key
+        );
+
+      }
+
+    }
+
+
+    res.json({
+
+      ok:
+        true,
+
+      mensaje:
+        'Todas las conversaciones fueron eliminadas.'
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// ESTADO DE YARVIS
+// ============================================================
+
+app.get(
+  '/health',
+  (
+    req,
+    res
+  ) => {
+
+    res.json({
+
+      status:
+        'ok',
+
+      ia:
+        NOMBRE_IA,
+
+      sesionesActivas:
+        sesiones.size,
+
+      usuariosConMemoria:
+        Object.keys(
+          memoria
+        ).length,
+
+      usuariosConConversaciones:
+        Object.keys(
+          conversaciones
+        ).length,
+
+      funciones: [
+
+        'chat',
+
+        'memoria',
+
+        'conversaciones',
+
+        'imagenes',
+
+        'busqueda-web',
+
+        'voz',
+
+        'modo-asistente',
+
+        'modo-explicativo',
+
+        'modo-creativo',
+
+        'modo-programador',
+
+        'modo-investigador'
+
+      ]
+
+    });
+
+  }
+);
+
+
+// ============================================================
+// FIN DE LA PARTE 4
+// ============================================================
+
