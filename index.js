@@ -212,6 +212,11 @@ const MAX_ARCHIVO_BYTES =
 
 const app = express();
 
+// Render funciona detrás de un proxy.
+// Esto permite que express-rate-limit
+// identifique correctamente la IP del usuario.
+app.set('trust proxy', 1);
+
 
 app.use(
   express.json({
