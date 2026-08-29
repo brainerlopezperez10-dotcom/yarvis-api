@@ -1290,4 +1290,664 @@ Listo
   <!-- ============================================================
        FIN PARTE 2
        ============================================================ -->
+  <script>
+(function () {
+
+  'use strict';
+
+  /* =========================================================
+     ELEMENTOS
+     ========================================================= */
+
+  var chat = document.getElementById('chat');
+  var input = document.getElementById('input');
+  var statusEl = document.getElementById('status');
+  var core = document.getElementById('core');
+
+  /* =========================================================
+     UTILIDADES
+     ========================================================= */
+
+  function mostrarEstado(texto) {
+    if (statusEl) {
+      statusEl.textContent = texto;
+    }
+  }
+
+  function desplazarChat() {
+    if (chat) {
+      setTimeout(function () {
+        chat.scrollTop = chat.scrollHeight;
+      }, 50);
+    }
+  }
+
+  function mensajeSistema(texto) {
+    if (typeof addMsg === 'function') {
+      addMsg(texto, 'bot', 'Copiloto');
+      desplazarChat();
+    }
+  }
+
+  function obtenerUserId() {
+    return localStorage.getItem('yarvis_user_id') || 'default';
+  }
+
+  function obtenerSessionId() {
+    return localStorage.getItem('yarvis_sid') || '';
+  }
+
+  function escapeHTML(texto) {
+    return String(texto || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /* =========================================================
+     CREAR COPILOTO
+     ========================================================= */
+
+  var copiloto = document.getElementById('copilotoFlotante');
+
+  if (!copiloto) {
+
+    copiloto = document.createElement('div');
+    copiloto.id = 'copilotoFlotante';
+
+    copiloto.innerHTML = `
+      <button id="btnCopiloto" type="button" aria-label="Abrir copiloto">
+        ✦
+      </button>
+
+      <div id="copilotoPanel">
+
+        <div class="copilotoTitulo">
+          <div>
+            <strong>YARVIS</strong>
+            <span>Copiloto</span>
+          </div>
+
+          <button id="cerrarCopiloto" type="button">×</button>
+        </div>
+
+        <div class="copilotoAcciones">
+
+          <button type="button" data-copiloto-action="nuevo">
+            <span>＋</span>
+            <b>Nueva conversación</b>
+          </button>
+
+          <button type="button" data-copiloto-action="memoria">
+            <span>🧠</span>
+            <b>Mi memoria</b>
+          </button>
+
+          <button type="button" data-copiloto-action="notas">
+            <span>📝</span>
+            <b>Mis notas</b>
+          </button>
+
+          <button type="button" data-copiloto-action="ayuda">
+            <span>?</span>
+            <b>Ayuda</b>
+          </button>
+
+        </div>
+
+        <div id="copilotoContenido" data-inicio="true">
+          <div class="copilotoVacio">
+            Selecciona una opción.
+          </div>
+        </div>
+
+      </div>
+    `;
+
+    document.body.appendChild(copiloto);
+  }
+
+  /* =========================================================
+     ESTILOS
+     ========================================================= */
+
+  if (!document.getElementById('estilosCopiloto')) {
+
+    var estilo = document.createElement('style');
+    estilo.id = 'estilosCopiloto';
+
+    estilo.textContent = `
+      #copilotoFlotante {
+        position: fixed;
+        right: 16px;
+        bottom: 82px;
+        z-index: 9999;
+        font-family: system-ui, sans-serif;
+      }
+
+      #btnCopiloto {
+        width: 54px;
+        height: 54px;
+        border: 1px solid rgba(0,220,255,.45);
+        border-radius: 50%;
+        background:
+          radial-gradient(
+            circle at 35% 30%,
+            #dfffff 0%,
+            #00d4ff 30%,
+            #0066aa 70%,
+            #001428 100%
+          );
+        color: white;
+        font-size: 25px;
+        box-shadow:
+          0 0 12px #00dfff,
+          0 0 28px rgba(0,180,255,.65);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: copilotoPulso 2s ease-in-out infinite;
+      }
+
+      @keyframes copilotoPulso {
+        0%,100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.07);
+        }
+      }
+
+      #btnCopiloto:active {
+        transform: scale(.9);
+      }
+
+      #copilotoPanel {
+        position: absolute;
+        right: 0;
+        bottom: 66px;
+        width: min(310px, calc(100vw - 30px));
+        padding: 12px;
+        border-radius: 20px;
+        border: 1px solid rgba(0,210,255,.28);
+        background:
+          linear-gradient(
+            145deg,
+            rgba(0,25,40,.98),
+            rgba(0,7,15,.98)
+          );
+        box-shadow:
+          0 0 25px rgba(0,190,255,.25),
+          0 15px 45px rgba(0,0,0,.65);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(12px) scale(.96);
+        transition:
+          opacity .2s ease,
+          transform .2s ease,
+          visibility .2s ease;
+      }
+
+      #copilotoPanel.abierto {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0) scale(1);
+      }
+
+      .copilotoTitulo {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        color: #7df9ff;
+      }
+
+      .copilotoTitulo strong {
+        display: block;
+        letter-spacing: .12em;
+        font-size: .9rem;
+      }
+
+      .copilotoTitulo span {
+        display: block;
+        color: #579aaa;
+        font-size: .65rem;
+        margin-top: 2px;
+      }
+
+      #cerrarCopiloto {
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(255,255,255,.07);
+        color: #9bcbd5;
+        font-size: 20px;
+        cursor: pointer;
+      }
+
+      .copilotoAcciones {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .copilotoAcciones button {
+        min-height: 70px;
+        border-radius: 14px;
+        border: 1px solid rgba(0,190,255,.2);
+        background: rgba(0,55,75,.45);
+        color: #dffaff;
+        padding: 8px;
+        cursor: pointer;
+        text-align: left;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .copilotoAcciones button:active {
+        transform: scale(.96);
+        background: rgba(0,100,135,.6);
+      }
+
+      .copilotoAcciones button span {
+        display: block;
+        font-size: 20px;
+        margin-bottom: 4px;
+      }
+
+      .copilotoAcciones button b {
+        display: block;
+        font-size: .68rem;
+        font-weight: 500;
+      }
+
+      #copilotoContenido {
+        margin-top: 10px;
+        max-height: 190px;
+        overflow-y: auto;
+        font-size: .75rem;
+        line-height: 1.45;
+        color: #a8d8e3;
+      }
+
+      .copilotoItem {
+        padding: 8px;
+        margin-bottom: 6px;
+        border-radius: 10px;
+        background: rgba(0,70,90,.3);
+        border: 1px solid rgba(0,180,255,.12);
+      }
+
+      .copilotoItem strong {
+        color: #7df9ff;
+      }
+
+      .copilotoVacio {
+        padding: 10px;
+        text-align: center;
+        color: #63909d;
+      }
+
+      @media (max-width: 380px) {
+        #copilotoFlotante {
+          right: 10px;
+        }
+
+        #copilotoPanel {
+          width: calc(100vw - 20px);
+        }
+      }
+    `;
+
+    document.head.appendChild(estilo);
+  }
+
+  /* =========================================================
+     ELEMENTOS DEL COPILOTO
+     ========================================================= */
+
+  var btnCopiloto = document.getElementById('btnCopiloto');
+  var panelCopiloto = document.getElementById('copilotoPanel');
+  var cerrarCopiloto = document.getElementById('cerrarCopiloto');
+  var contenido = document.getElementById('copilotoContenido');
+
+  /* =========================================================
+     ABRIR / CERRAR
+     ========================================================= */
+
+  if (btnCopiloto && panelCopiloto) {
+
+    btnCopiloto.addEventListener('click', function (e) {
+      e.stopPropagation();
+      panelCopiloto.classList.toggle('abierto');
+    });
+
+  }
+
+  if (cerrarCopiloto && panelCopiloto) {
+
+    cerrarCopiloto.addEventListener('click', function (e) {
+      e.stopPropagation();
+      panelCopiloto.classList.remove('abierto');
+    });
+
+  }
+
+  /* =========================================================
+     CONTENIDO
+     ========================================================= */
+
+  function mostrarContenido(html) {
+
+    if (!contenido) return;
+
+    contenido.dataset.inicio = 'false';
+    contenido.innerHTML = html;
+
+  }
+
+  /* =========================================================
+     NUEVA CONVERSACIÓN
+     ========================================================= */
+
+  function nuevaConversacion() {
+
+    var confirmar = window.confirm(
+      '¿Quieres comenzar una nueva conversación?'
+    );
+
+    if (!confirmar) return;
+
+    if (chat) {
+      chat.innerHTML = '';
+    }
+
+    var nuevoSid =
+      Date.now() + '_' +
+      Math.random().toString(36).slice(2);
+
+    localStorage.setItem('yarvis_sid', nuevoSid);
+
+    if (typeof window.sessionId !== 'undefined') {
+      window.sessionId = 'web_' + nuevoSid;
+    }
+
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+
+    mensajeSistema('Nueva conversación iniciada.');
+
+    mostrarContenido(
+      '<div class="copilotoVacio">' +
+      'Nueva conversación lista.' +
+      '</div>'
+    );
+
+  }
+
+  /* =========================================================
+     MEMORIA
+     ========================================================= */
+
+  async function cargarMemoria() {
+
+    mostrarContenido(
+      '<div class="copilotoVacio">🧠 Cargando memoria...</div>'
+    );
+
+    try {
+
+      var url =
+        '/memory?userId=' +
+        encodeURIComponent(obtenerUserId());
+
+      var res = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store'
+      });
+
+      var textoRespuesta = await res.text();
+      var data = {};
+
+      try {
+        data = JSON.parse(textoRespuesta);
+      } catch (jsonError) {
+        throw new Error(
+          'El servidor no devolvió JSON.'
+        );
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          data.error || 'Error HTTP ' + res.status
+        );
+      }
+
+      var lista = Array.isArray(data.memories)
+        ? data.memories
+        : [];
+
+      if (!lista.length) {
+
+        mostrarContenido(
+          '<div class="copilotoVacio">' +
+          '🧠 Yarvis todavía no tiene recuerdos guardados.' +
+          '</div>'
+        );
+
+        return;
+      }
+
+      var html = '';
+
+      lista.slice(-10).reverse().forEach(function (item) {
+
+        html +=
+          '<div class="copilotoItem">' +
+          '<strong>🧠</strong> ' +
+          escapeHTML(item.text || '') +
+          '</div>';
+
+      });
+
+      mostrarContenido(html);
+
+    } catch (e) {
+
+      console.error('Error cargando memoria:', e);
+
+      mostrarContenido(
+        '<div class="copilotoVacio">' +
+        '❌ No se pudo cargar la memoria.<br><br>' +
+        escapeHTML(e.message) +
+        '</div>'
+      );
+
+    }
+
+  }
+
+  /* =========================================================
+     NOTAS
+     ========================================================= */
+
+  async function cargarNotas() {
+
+    mostrarContenido(
+      '<div class="copilotoVacio">📝 Cargando notas...</div>'
+    );
+
+    try {
+
+      var url =
+        '/notes?userId=' +
+        encodeURIComponent(obtenerUserId());
+
+      var res = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store'
+      });
+
+      var textoRespuesta = await res.text();
+      var data = {};
+
+      try {
+        data = JSON.parse(textoRespuesta);
+      } catch (jsonError) {
+        throw new Error(
+          'El servidor no devolvió JSON.'
+        );
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          data.error || 'Error HTTP ' + res.status
+        );
+      }
+
+      var lista = Array.isArray(data.notes)
+        ? data.notes
+        : [];
+
+      if (!lista.length) {
+
+        mostrarContenido(
+          '<div class="copilotoVacio">' +
+          '📝 No tienes notas guardadas.' +
+          '</div>'
+        );
+
+        return;
+      }
+
+      var html = '';
+
+      lista.slice(-10).reverse().forEach(function (item) {
+
+        html +=
+          '<div class="copilotoItem">' +
+          '<strong>📝</strong> ' +
+          escapeHTML(item.text || '') +
+          '</div>';
+
+      });
+
+      mostrarContenido(html);
+
+    } catch (e) {
+
+      console.error('Error cargando notas:', e);
+
+      mostrarContenido(
+        '<div class="copilotoVacio">' +
+        '❌ No se pudieron cargar las notas.<br><br>' +
+        escapeHTML(e.message) +
+        '</div>'
+      );
+
+    }
+
+  }
+
+  /* =========================================================
+     AYUDA
+     ========================================================= */
+
+  function mostrarAyuda() {
+
+    mostrarContenido(
+      '<div class="copilotoItem">' +
+      '<strong>YARVIS — AYUDA</strong><br><br>' +
+      '/atlas — investigar en Internet<br>' +
+      '/code — programar<br>' +
+      '/nova — creatividad<br>' +
+      '/lumen — explicar<br>' +
+      '/resumen — resumir conversación<br>' +
+      '/formal — tono formal<br>' +
+      '/casual — tono casual' +
+      '</div>'
+    );
+
+  }
+
+  /* =========================================================
+     ACCIONES
+     ========================================================= */
+
+  if (copiloto) {
+
+    copiloto.addEventListener('click', function (e) {
+
+      var boton = e.target.closest(
+        '[data-copiloto-action]'
+      );
+
+      if (!boton) return;
+
+      e.stopPropagation();
+
+      var accion =
+        boton.getAttribute('data-copiloto-action');
+
+      if (accion === 'nuevo') {
+        nuevaConversacion();
+        return;
+      }
+
+      if (accion === 'memoria') {
+        cargarMemoria();
+        return;
+      }
+
+      if (accion === 'notas') {
+        cargarNotas();
+        return;
+      }
+
+      if (accion === 'ayuda') {
+        mostrarAyuda();
+        return;
+      }
+
+    });
+
+  }
+
+  /* =========================================================
+     CERRAR AL TOCAR FUERA
+     ========================================================= */
+
+  document.addEventListener('click', function (e) {
+
+    if (!copiloto || !panelCopiloto) return;
+
+    if (!panelCopiloto.classList.contains('abierto')) {
+      return;
+    }
+
+    if (!copiloto.contains(e.target)) {
+      panelCopiloto.classList.remove('abierto');
+    }
+
+  });
+
+  /* =========================================================
+     INICIO
+     ========================================================= */
+
+  mostrarEstado('Listo');
+
+  console.log(
+    '✓ Copiloto flotante de Yarvis cargado correctamente.'
+  );
+
+})();
+  </script>
   
