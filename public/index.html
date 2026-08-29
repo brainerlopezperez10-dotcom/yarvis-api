@@ -1290,4 +1290,190 @@ Listo
   <!-- ============================================================
        FIN PARTE 2
        ============================================================ -->
-  
+     <!-- ============================================================
+       PARTE 3 — ACCIONES INTELIGENTES DEL COPILOTO
+       ============================================================ -->
+
+  <script>
+    (function() {
+
+      var acciones =
+        document.querySelectorAll(
+          '.copilotoAccion'
+        );
+
+      if (!acciones.length) return;
+
+      function agregarRespuestaCopiloto(
+        texto
+      ) {
+
+        if (!copilotoContenido) return;
+
+        var div =
+          document.createElement('div');
+
+        div.className =
+          'copilotoMensaje';
+
+        div.textContent =
+          texto;
+
+        copilotoContenido.appendChild(
+          div
+        );
+
+        copilotoContenido.scrollTop =
+          copilotoContenido.scrollHeight;
+
+      }
+
+      acciones.forEach(
+        function(boton) {
+
+          boton.addEventListener(
+            'click',
+            function() {
+
+              var accion =
+                boton.getAttribute(
+                  'data-copiloto'
+                );
+
+              if (!accion) return;
+
+              /*
+               * El copiloto prepara la acción
+               * en el chat principal.
+               */
+
+              if (accion === 'resumen') {
+
+                input.value =
+                  '/resumen';
+
+              }
+
+              else if (
+                accion === 'explicar'
+              ) {
+
+                input.value =
+                  '/lumen Explica lo último que hablamos';
+
+              }
+
+              else if (
+                accion === 'codigo'
+              ) {
+
+                input.value =
+                  '/code Ayúdame con el código que estamos trabajando';
+
+              }
+
+              else if (
+                accion === 'buscar'
+              ) {
+
+                input.value =
+                  '/atlas Busca información actual sobre: ';
+
+              }
+
+              cerrarCopiloto();
+
+              input.focus();
+
+              /*
+               * En móvil mostramos el teclado
+               * después de seleccionar la acción.
+               */
+
+              setTimeout(
+                function() {
+
+                  try {
+
+                    input.focus();
+
+                  } catch (e) {}
+
+                },
+                100
+              );
+
+            }
+          );
+
+        }
+      );
+
+      /*
+       * Cerrar el copiloto al tocar
+       * fuera de su ventana.
+       */
+
+      document.addEventListener(
+        'click',
+        function(e) {
+
+          if (
+            !copilotoPanel.classList.contains(
+              'abierto'
+            )
+          ) {
+            return;
+          }
+
+          if (
+            copilotoPanel.contains(e.target) ||
+            copilotoBtn.contains(e.target)
+          ) {
+            return;
+          }
+
+          cerrarCopiloto();
+
+        }
+      );
+
+      /*
+       * Tecla Escape para cerrar.
+       */
+
+      document.addEventListener(
+        'keydown',
+        function(e) {
+
+          if (
+            e.key === 'Escape'
+          ) {
+
+            cerrarCopiloto();
+
+          }
+
+        }
+      );
+
+      /*
+       * Mensaje inicial del copiloto.
+       */
+
+      if (
+        copilotoContenido &&
+        !copilotoContenido.dataset.iniciado
+      ) {
+
+        copilotoContenido.dataset.iniciado =
+          'true';
+
+      }
+
+    })();
+  </script>
+
+  <!-- ============================================================
+       FIN PARTE 3
+       ============================================================ -->
