@@ -353,4 +353,258 @@ function formatearResultadosBusqueda(datos) {
     });
   }
   return { texto: texto, fuentes: fuentes };
+}async function procesarRespuestaIA(mensaje, sessionId, modo, imagen, mimeType, userId) {
+  modo = modo || 'asistente';
+  userId = userId || 'default';
+
+  var agenteId = detectarAgente(mensaje);
+  var agente = AGENTES[agenteId] || AGENTES.yarvis;
+  var mensajeLimpio = limpiarComando(mensaje);
+  var tono = detectarTono(mensaje);
+  if (tono !== 'normal') tonosUsuario.set(userId, tono);
+  var tonoActivo = tonosUsuario.get(userId) || 'normal';
+  var sesion = obtenerSesion(sessionId, agenteId);
+  var fuentes = [];
+
+  try {
+    if (esResumen(mensaje)) {
+      var historial = sesion.mensajes.slice(1).map(function(m) {
+        return (m.role === 'user' ? 'Usuario: ' : 'Yarvis: ') + (typeof m.content === 'string' ? m.content : '');
+      }).join('\n').slice(-4000);
+
+      var completionResumen = await groq.chat.completions.create({
+        model: MODELO_TEXTO,
+        messages: [
+          { role: 'system', content: 'Resume la conversacion de forma clara y breve en espanol.' },
+          { role: 'user', content: historial || 'No hay conversacion previa.' }
+        ],
+        temperature: 0.4,
+        max_tokens: 800
+      });
+
+      var resumen = completionResumen.choices && completionResumen.choices[0] && completionResumen.choices[0].message
+        ? completionResumen.choices[0].message.content
+        : 'No hay suficiente conversacion para resumir.';
+
+      return {
+        respuesta: 'Yarvis:\n\n' + resumen,
+        agente: 'Yarvis',
+        fuentes: []
+      };
+    }
+
+    if (imagen && mimeType) {
+      var bytes = Buffer.byteLength(imagen, 'base64');
+      if (bytes > MAX_IMAGEN_BYTES) throw new Error('La imagen supera el limite de 8MB.');
+
+      var memoriaTexto = contextoMemoria(userId);
+      var mensajesImg = [
+        { role: 'system', content: agente.prompt + memoriaTexto + (TONOS[tonoActivo] || '') },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: mensajeLimpio || 'Que observas en esta imagen?' },
+            { type: 'image_url', image_url: { url: 'data:' + mimeType + ';base64,' + imagen } }
+          ]
+        }
+      ];
+
+      var completionImg = await groq.chat.completions.create({
+        model: MODELO_VISION,
+        messages: mensajesImg,
+        temperature: 0.7,
+        max_tokens: 2048
+      });
+
+      var respImg = completionImg.choices && completionImg.choices[0] && completionImg.choices[0].message
+        ? completionImg.choices[0].message.content
+        : 'No pude analizar la imagen.';
+
+      return {
+        respuesta: agente.nombre + ':\n\n' + respImg,
+        agente: agente.nombre,
+        fuentes: []
+      };
+    }
+
+    if (!mensajeLimpio || typeof mensajeLimpio !== 'string') {
+      throw new Error('El mensaje esta vacio.');
+    }
+
+    var memoriaTexto2 = contextoMemoria(userId);
+    if (sesion.mensajes[0]) {
+      sesion.mensajes[0].content = agente.prompt + memoriaTexto2 + (TONOS[tonoActivo] || '');
+    }
+
+    var contextoBusqueda = '';
+    if (agenteId === 'atlas') {
+      try {
+        var datos = await buscarEnInternet(mensajeLimpio);
+        var formateado = formatearResultadosBusqueda(datos);
+        contextoBusqueda = formateado.texto;
+        fuentes = formateado.fuentes;
+      } catch (error) {
+        console.error('Error en busqueda:', error.message);
+      }
+    }
+
+    var mensajeParaIA = mensajeLimpio;
+    if (contextoBusqueda) {
+      mensajeParaIA += '\n\nINFORMACION OBTENIDA DE INTERNET:\n' + contextoBusqueda + '\n\nUtiliza esta informacion para responder. No inventes datos que no aparezcan aqui.';
+    }
+
+    var mensajesParaEnviar = sesion.mensajes.concat([{ role: 'user', content: mensajeParaIA }]);
+
+    var completion = await groq.chat.completions.create({
+      model: agente.modelo,
+      messages: mensajesParaEnviar,
+      temperature: 0.7,
+      max_tokens: 2048
+    });
+
+    var respuesta = 'No pude generar una respuesta.';
+    if (completion.choices && completion.choices[0] && completion.choices[0].message) {
+      respuesta = completion.choices[0].message.content;
+    }
+
+    sesion.mensajes.push({ role: 'user', content: mensajeLimpio });
+    sesion.mensajes.push({ role: 'assistant', content: respuesta });
+    recortarHistorial(sesion);
+    guardarConversacion(userId, sessionId, mensajeLimpio.substring(0, 60));
+
+    return {
+      respuesta: agente.nombre + ':\n\n' + respuesta,
+      agente: agente.nombre,
+      fuentes: fuentes
+    };
+  } catch (error) {
+    console.error('Error de Yarvis:', error);
+    throw new Error(error.message || 'Ocurrio un error al generar la respuesta.');
+  }
 }
+
+app.post('/chat', limitador, async function(req, res) {
+  try {
+    var mensaje = req.body.mensaje;
+    var sessionId = req.body.sessionId || 'web_session';
+    var modo = req.body.modo || 'asistente';
+    var imagen = req.body.imagen;
+    var mimeType = req.body.mimeType;
+    var userId = req.body.userId || 'default';
+
+    if (!mensaje && !imagen) {
+      return res.status(400).json({ error: 'Envia un mensaje o una imagen.' });
+    }
+    if (typeof sessionId !== 'string' || sessionId.length > 100) {
+      return res.status(400).json({ error: 'sessionId invalido.' });
+    }
+    if (imagen && !mimeType) {
+      return res.status(400).json({ error: 'Falta mimeType para la imagen.' });
+    }
+
+    var result = await procesarRespuestaIA(mensaje, sessionId, modo, imagen, mimeType, userId);
+
+    res.json({
+      ia: NOMBRE_IA,
+      respuesta: result.respuesta,
+      agente: result.agente,
+      fuentes: result.fuentes || []
+    });
+  } catch (error) {
+    console.error('Error en /chat:', error);
+    res.status(500).json({ error: error.message || 'Error interno del servidor.' });
+  }
+});
+
+app.post('/reset', limitador, function(req, res) {
+  var sessionId = req.body.sessionId || 'web_session';
+  var modo = req.body.modo || 'asistente';
+  sesiones.delete(sessionId + '_' + modo);
+  Object.keys(AGENTES).forEach(function(a) {
+    sesiones.delete(sessionId + '_' + a);
+  });
+  res.json({ ok: true, mensaje: 'Conversacion reiniciada.' });
+});
+
+app.post('/transcribe', limitador, async function(req, res) {
+  try {
+    var audio = req.body.audio;
+    var mimeType = req.body.mimeType || 'audio/webm';
+    if (!audio) return res.status(400).json({ error: 'Falta el audio.' });
+
+    var bytes = Buffer.byteLength(audio, 'base64');
+    if (bytes > MAX_AUDIO_BYTES) {
+      return res.status(400).json({ error: 'El audio supera el limite de 15MB.' });
+    }
+
+    var extension = 'webm';
+    if (mimeType.indexOf('mp4') !== -1) extension = 'mp4';
+    else if (mimeType.indexOf('ogg') !== -1) extension = 'ogg';
+    else if (mimeType.indexOf('wav') !== -1) extension = 'wav';
+
+    var archivo = path.join(os.tmpdir(), 'yarvis-' + crypto.randomUUID() + '.' + extension);
+    fs.writeFileSync(archivo, Buffer.from(audio, 'base64'));
+
+    var transcripcion = await groq.audio.transcriptions.create({
+      file: fs.createReadStream(archivo),
+      model: MODELO_STT,
+      language: 'es'
+    });
+
+    try { fs.unlinkSync(archivo); } catch (e) {}
+
+    res.json({ texto: transcripcion.text || '' });
+  } catch (error) {
+    console.error('Error transcribiendo:', error);
+    res.status(500).json({ error: 'No pude transcribir el audio.' });
+  }
+});
+
+app.post('/tts', limitador, async function(req, res) {
+  try {
+    var texto = req.body.texto;
+    if (!texto || typeof texto !== 'string') {
+      return res.status(400).json({ error: 'Falta el texto.' });
+    }
+    var resultado = await groq.audio.speech.create({
+      model: MODELO_TTS,
+      voice: VOZ_TTS,
+      input: texto.trim().slice(0, 1000),
+      response_format: 'wav'
+    });
+    var buffer = Buffer.from(await resultado.arrayBuffer());
+    res.set('Content-Type', 'audio/wav');
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error TTS:', error);
+    res.status(500).json({ error: 'No pude generar el audio.' });
+  }
+});
+
+app.get('/health', function(req, res) {
+  res.json({
+    status: 'ok',
+    ia: NOMBRE_IA,
+    version: '1.4.0',
+    agentes: Object.keys(AGENTES),
+    groq: Boolean(GROQ_API_KEY),
+    tavily: Boolean(TAVILY_API_KEY)
+  });
+});
+
+app.get('*', function(req, res) {
+  var indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) res.sendFile(indexPath);
+  else res.json({ ia: NOMBRE_IA, mensaje: 'Yarvis online' });
+});
+
+app.use(function(err, req, res, next) {
+  console.error('Error del servidor:', err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Error interno del servidor.' });
+});
+
+app.listen(PORT, '0.0.0.0', function() {
+  console.log(NOMBRE_IA + ' puerto ' + PORT);
+  console.log('Agentes: ' + Object.keys(AGENTES).join(', '));
+});
