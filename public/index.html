@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <title>Yarvis</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #000;
+      color: #e0f7ff;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* =========================
+       ESTRELLAS
+       ========================= */
+
+    .stars {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(1px 1px at 20% 30%, #fff, transparent),
+        radial-gradient(1px 1px at 60% 70%, #fff, transparent),
+        radial-gradient(1px 1px at 80% 20%, #aef, transparent),
+        radial-gradient(1px 1px at 40% 80%, #fff, transparent);
+      background-size: 200px 200px;
+      opacity: .3;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* =========================
+       CABECERA
+       ========================= */
+
+    header {
+      position: relative;
+      z-index: 2;
+      padding: 10px 14px;
+      text-align: center;
+      border-bottom: 1px solid rgba(0, 200, 255, .15);
+      background: rgba(0, 10, 20, .8);
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 1.05rem;
+      letter-spacing: .15em;
+      color: #7df9ff;
+    }
+
+    header span {
+      display: block;
+      font-size: .68rem;
+      color: #5a9aaa;
+      margin-top: 2px;
+    }
+
+    /* =========================
+       NÚCLEO
+       ========================= */
+
+    .core-wrap {
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .core {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+
+      background:
+        radial-gradient(
+          circle at 35% 35%,
+          #e0ffff,
+          #00d4ff 40%,
+          #0066aa 70%,
+          #001428
+        );
+
+      box-shadow:
+        0 0 16px #00e5ff,
+        0 0 32px #00aaff,
+        0 0 50px rgba(0, 180, 255, .4);
+
+      animation: pulse 2.5s ease-in-out infinite;
+      position: relative;
+    }
+
+    .core::before {
+      content: "";
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 220, 255, .35);
+      animation: ring 3s linear infinite;
+    }
+
+    .core.listening {
+      box-shadow:
+        0 0 24px #00ffcc,
+        0 0 48px #00ffaa;
+
+      animation:
+        pulse-fast .8s ease-in-out infinite;
+    }
+
+    .core.thinking {
+      box-shadow:
+        0 0 24px #ffaa00,
+        0 0 48px #ff8800;
+    }
+
+    .core.speaking {
+      box-shadow:
+        0 0 24px #7c5cff,
+        0 0 48px #5a3fff;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.06);
+      }
+    }
+
+    @keyframes pulse-fast {
+      0%, 100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.12);
+      }
+    }
+
+    @keyframes ring {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* =========================
+       ESTADO
+       ========================= */
+
+    .status {
+      text-align: center;
+      font-size: .72rem;
+      color: #5a9aaa;
+      padding: 2px 8px 6px;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* =========================
+       SUGERENCIAS
+       ========================= */
+
+    .hints {
+      position: relative;
+      z-index: 2;
+      flex-shrink: 0;
+      padding: 0 10px 6px;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .hint {
+      flex-shrink: 0;
+      font-size: .68rem;
+      padding: 4px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 180, 255, .25);
+      background: rgba(0, 40, 60, .5);
+      color: #8ec8d8;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* =========================
+       CHAT
+       ========================= */
+
+    #chat {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+
+      padding: 8px 12px 130px;
+
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+
+      position: relative;
+      z-index: 2;
+    }
+
+    .msg {
+      max-width: 92%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-size: .9rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+      flex-shrink: 0;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: rgba(0, 100, 160, .4);
+      border: 1px solid rgba(0, 200, 255, .25);
+    }
+
+    .msg.bot {
+      align-self: flex-start;
+      background: rgba(0, 40, 60, .75);
+      border: 1px solid rgba(0, 180, 255, .2);
+    }
+
+    .msg .agent {
+      display: block;
+      font-size: .68rem;
+      color: #7df9ff;
+      margin-bottom: 4px;
+      letter-spacing: .04em;
+    }
+
+    .fuentes {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(0, 180, 255, .2);
+      font-size: .75rem;
+    }
+
+    .fuentes a {
+      display: block;
+      color: #7df9ff;
+      text-decoration: none;
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+
+    .fuentes a:hover {
+      text-decoration: underline;
+    }
+
+    /* =========================
+       BARRA INFERIOR
+       ========================= */
+
+    .bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+
+      z-index: 10;
+
+      padding:
+        8px 10px
+        calc(12px + env(safe-area-inset-bottom, 0px));
+
+      background:
+        linear-gradient(
+          transparent,
+          rgba(0, 8, 16, .98) 20%
+        );
+
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    #input {
+      flex: 1;
+
+      background: rgba(0, 30, 50, .9);
+      border: 1px solid rgba(0, 200, 255, .3);
+      border-radius: 22px;
+
+      padding: 11px 14px;
+
+      color: #e0f7ff;
+      font-size: .92rem;
+      outline: none;
+    }
+
+    #input::placeholder {
+      color: #4a7a8a;
+    }
+
+    button.icon {
+      width: 44px;
+      height: 44px;
+
+      border-radius: 50%;
+      border: none;
+
+      cursor: pointer;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    button.icon:active {
+      transform: scale(.92);
+    }
+
+    #btnSend {
+      background: linear-gradient(145deg, #00b4e6, #0077aa);
+      color: #fff;
+    }
+
+    #btnMic {
+      background: linear-gradient(145deg, #00c9a0, #008866);
+      color: #fff;
+    }
+
+    #btnMic.recording {
+      background: linear-gradient(145deg, #ff4466, #cc2244);
+      animation: pulse-fast .7s ease-in-out infinite;
+    }
+
+    #btnImg {
+      background: linear-gradient(145deg, #7c5cff, #5a3fff);
+      color: #fff;
+    }
+
+    #fileImg {
+      display: none;
+    }
+
+    /* =========================================================
+       COPILOTO FLOTANTE
+       ========================================================= */
+
+    #copilotoFlotante {
+      position: fixed;
+      right: 14px;
+      bottom: 78px;
+      z-index: 9999;
+      font-family: system-ui, sans-serif;
+    }
+
+    #btnCopiloto {
+      width: 56px;
+      height: 56px;
+
+      border: 1px solid rgba(0, 220, 255, .5);
+      border-radius: 50%;
+
+      background:
+        radial-gradient(
+          circle at 35% 30%,
+          #eaffff 0%,
+          #00d4ff 30%,
+          #0066aa 70%,
+          #001428 100%
+        );
+
+      color: white;
+      font-size: 26px;
+
+      box-shadow:
+        0 0 12px #00dfff,
+        0 0 30px rgba(0, 180, 255, .65);
+
+      cursor: pointer;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      animation: copilotoPulso 2s ease-in-out infinite;
+    }
+
+    @keyframes copilotoPulso {
+      0%, 100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.07);
+      }
+    }
+
+    #btnCopiloto:active {
+      transform: scale(.9);
+    }
+
+    #copilotoPanel {
+      position: absolute;
+
+      right: 0;
+      bottom: 66px;
+
+      width: min(320px, calc(100vw - 24px));
+
+      padding: 13px;
+
+      border-radius: 20px;
+
+      border: 1px solid rgba(0, 210, 255, .3);
+
+      background:
+        linear-gradient(
+          145deg,
+          rgba(0, 25, 40, .98),
+          rgba(0, 7, 15, .99)
+        );
+
+      box-shadow:
+        0 0 25px rgba(0, 190, 255, .25),
+        0 15px 45px rgba(0, 0, 0, .7);
+
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+
+      opacity: 0;
+      visibility: hidden;
+
+      transform:
+        translateY(12px)
+        scale(.96);
+
+      transition:
+        opacity .2s ease,
+        transform .2s ease,
+        visibility .2s ease;
+    }
+
+    #copilotoPanel.abierto {
+      opacity: 1;
+      visibility: visible;
+
+      transform:
+        translateY(0)
+        scale(1);
+    }
+
+    .copilotoTitulo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      margin-bottom: 10px;
+
+      color: #7df9ff;
+    }
+
+    .copilotoTitulo strong {
+      display: block;
+      letter-spacing: .12em;
+      font-size: .9rem;
+    }
+
+    .copilotoTitulo span {
+      display: block;
+      color: #579aaa;
+      font-size: .65rem;
+      margin-top: 2px;
+    }
+
+    #cerrarCopiloto {
+      width: 30px;
+      height: 30px;
+
+      border: 0;
+      border-radius: 50%;
+
+      background: rgba(255, 255, 255, .07);
+
+      color: #9bcbd5;
+
+      font-size: 20px;
+
+      cursor: pointer;
+    }
+
+    .copilotoAcciones {
+      display: grid;
+
+      grid-template-columns: 1fr 1fr;
+
+      gap: 8px;
+    }
+
+    .copilotoAcciones button {
+      min-height: 70px;
+
+      border-radius: 14px;
+
+      border: 1px solid rgba(0, 190, 255, .2);
+
+      background: rgba(0, 55, 75, .45);
+
+      color: #dffaff;
+
+      padding: 8px;
+
+      cursor: pointer;
+
+      text-align: left;
+    }
+
+    .copilotoAcciones button:active {
+      transform: scale(.96);
+
+      background: rgba(0, 100, 135, .6);
+    }
+
+    .copilotoAcciones button span {
+      display: block;
+
+      font-size: 20px;
+
+      margin-bottom: 4px;
+    }
+
+    .copilotoAcciones button b {
+      display: block;
+
+      font-size: .68rem;
+
+      font-weight: 500;
+    }
+
+    #copilotoContenido {
+      margin-top: 10px;
+
+      max-height: 200px;
+
+      overflow-y: auto;
+
+      font-size: .75rem;
+
+      line-height: 1.45;
+
+      color: #a8d8e3;
+    }
+
+    .copilotoItem {
+      padding: 9px;
+
+      margin-bottom: 6px;
+
+      border-radius: 10px;
+
+      background: rgba(0, 70, 90, .3);
+
+      border: 1px solid rgba(0, 180, 255, .12);
+    }
+
+    .copilotoItem strong {
+      color: #7df9ff;
+    }
+
+    .copilotoVacio {
+      padding: 10px;
+
+      text-align: center;
+
+      color: #63909d;
+    }
+
+    @media (max-width: 380px) {
+      #copilotoFlotante {
+        right: 8px;
+      }
+
+      #copilotoPanel {
+        width: calc(100vw - 16px);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="stars"></div>
+
+  <!-- =========================
+       HEADER
+       ========================= -->
+
+  <header>
+    <h1>YARVIS</h1>
+    <span id="estadoLabel">CALMADO</span>
+  </header>
+
+  <!-- =========================
+       NÚCLEO
+       ========================= -->
+
+  <div class="core-wrap">
+    <div class="core" id="core"></div>
+  </div>
+
+  <div class="status" id="status">
+    Listo
+  </div>
+
+  <!-- =========================
+       COMANDOS
+       ========================= -->
+
+  <div class="hints">
+
+    <span class="hint" data-cmd="/resumen">
+      /resumen
+    </span>
+
+    <span class="hint" data-cmd="/atlas ">
+      /atlas
+    </span>
+
+    <span class="hint" data-cmd="/code ">
+      /code
+    </span>
+
+    <span class="hint" data-cmd="/nova ">
+      /nova
+    </span>
+
+    <span class="hint" data-cmd="/lumen ">
+      /lumen
+    </span>
+
+    <span class="hint" data-cmd="/formal ">
+      /formal
+    </span>
+
+    <span class="hint" data-cmd="/casual ">
+      /casual
+    </span>
+
+  </div>
+
+  <!-- =========================
+       CHAT
+       ========================= -->
+
+  <div id="chat"></div>
+
+  <!-- =========================
+       BARRA
+       ========================= -->
+
+  <div class="bar">
+
+    <button
+      class="icon"
+      id="btnMic"
+      type="button"
+      title="Hablar">
+      🎤
+    </button>
+
+    <button
+      class="icon"
+      id="btnImg"
+      type="button"
+      title="Imagen">
+      🖼️
+    </button>
+
+    <input
+      id="fileImg"
+      type="file"
+      accept="image/*">
+
+    <input
+      id="input"
+      type="text"
+      placeholder="Escribe o habla..."
+      autocomplete="off">
+
+    <button
+      class="icon"
+      id="btnSend"
+      type="button"
+      title="Enviar">
+      ➤
+    </button>
+
+  </div>
+
+  <!-- =====================================================
+       COPILOTO
+       ===================================================== -->
+
+  <div id="copilotoFlotante">
+
+    <button
+      id="btnCopiloto"
+      type="button"
+      aria-label="Abrir copiloto">
+      ✦
+    </button>
+
+    <div id="copilotoPanel">
+
+      <div class="copilotoTitulo">
+
+        <div>
+          <strong>YARVIS</strong>
+          <span>Copiloto</span>
+        </div>
+
+        <button
+          id="cerrarCopiloto"
+          type="button">
+          ×
+        </button>
+
+      </div>
+
+      <div class="copilotoAcciones">
+
+        <button
+          type="button"
+          data-copiloto-action="nuevo">
+
+          <span>＋</span>
+          <b>Nueva conversación</b>
+
+        </button>
+
+        <button
+          type="button"
+          data-copiloto-action="memoria">
+
+          <span>🧠</span>
+          <b>Mi memoria</b>
+
+        </button>
+
+        <button
+          type="button"
+          data-copiloto-action="notas">
+
+          <span>📝</span>
+          <b>Mis notas</b>
+
+        </button>
+
+        <button
+          type="button"
+          data-copiloto-action="ayuda">
+
+          <span>?</span>
+          <b>Ayuda</b>
+
+        </button>
+
+      </div>
+
+      <div id="copilotoContenido"></div>
+
+    </div>
+
+  </div>
+
+  <!-- =====================================================
+       JAVASCRIPT PRINCIPAL
+       ===================================================== -->
+
+  <script>
+
+    'use strict';
+
+    /* =========================
+       ELEMENTOS
+       ========================= */
+
+    var chat =
+      document.getElementById('chat');
+
+    var input =
+      document.getElementById('input');
+
+    var btnSend =
+      document.getElementById('btnSend');
+
+    var btnMic =
+      document.getElementById('btnMic');
+
+    var btnImg =
+      document.getElementById('btnImg');
+
+    var fileImg =
+      document.getElementById('fileImg');
+
+    var core =
+      document.getElementById('core');
+
+    var statusEl =
+      document.getElementById('status');
+
+    var estadoLabel =
+      document.getElementById('estadoLabel');
+
+
+    /* =========================
+       SESIÓN
+       ========================= */
+
+    var sid =
+      localStorage.getItem('yarvis_sid');
+
+    if (!sid) {
+
+      sid =
+        Date.now() +
+        '_' +
+        Math.random()
+          .toString(36)
+          .slice(2);
+
+      localStorage.setItem(
+        'yarvis_sid',
+        sid
+      );
+    }
+
+    var sessionId =
+      'web_' + sid;
+
+
+    /* =========================
+       ESTADO
+       ========================= */
+
+    function setEstado(
+      nombre,
+      clase
+    ) {
+
+      if (estadoLabel) {
+        estadoLabel.textContent =
+          nombre;
+      }
+
+      if (core) {
+
+        core.classList.remove(
+          'listening',
+          'thinking',
+          'speaking'
+        );
+
+        if (clase) {
+          core.classList.add(clase);
+        }
+      }
+
+      if (statusEl) {
+        statusEl.textContent =
+          nombre;
+      }
+    }
+
+
+    /* =========================
+       MENSAJES
+       ========================= */
+
+    function addMsg(
+      text,
+      who,
+      agentName,
+      fuentes
+    ) {
+
+      var div =
+        document.createElement('div');
+
+      div.className =
+        'msg ' + who;
+
+      if (
+        agentName &&
+        who === 'bot'
+      ) {
+
+        var ag =
+          document.createElement('span');
+
+        ag.className =
+          'agent';
+
+        ag.textContent =
+          agentName;
+
+        div.appendChild(ag);
+      }
+
+      div.appendChild(
+        document.createTextNode(
+          text || ''
+        )
+      );
+
+      if (
+        fuentes &&
+        fuentes.length
+      ) {
+
+        var box =
+          document.createElement('div');
+
+        box.className =
+          'fuentes';
+
+        box.appendChild(
+          document.createTextNode(
+            'Fuentes:'
+          )
+        );
+
+        fuentes.forEach(
+          function (f, i) {
+
+            var a =
+              document.createElement('a');
+
+            a.href =
+              f.url || '#';
+
+            a.target =
+              '_blank';
+
+            a.rel =
+              'noopener noreferrer';
+
+            a.textContent =
+              (i + 1) +
+              '. ' +
+              (
+                f.titulo ||
+                f.url ||
+                'Fuente'
+              );
+
+            box.appendChild(a);
+
+          }
+        );
+
+        div.appendChild(box);
+      }
+
+      chat.appendChild(div);
+
+      chat.scrollTop =
+        chat.scrollHeight;
+    }
+
+
+    /* =========================
+       DETECTAR AGENTE
+       ========================= */
+
+    function parseAgent(respuesta) {
+
+      var m =
+        (respuesta || '').match(
+          /^([A-Za-zÁÉÍÓÚáéíóúñÑ]+):\s*\n\n?([\s\S]*)$/
+        );
+
+      if (m) {
+
+        return {
+          agent: m[1],
+          text: m[2].trim()
+        };
+
+      }
+
+      return {
+        agent: 'Yarvis',
+        text: respuesta || ''
+      };
+    }
+
+
+    /* =========================
+       ENVIAR
+       ========================= */
+
+    async function enviar(
+      texto,
+      imagen,
+      mimeType
+    ) {
+
+      if (
+        (!texto ||
+          !texto.trim()) &&
+        !imagen
+      ) {
+        return;
+      }
+
+      texto =
+        (texto || '').trim();
+
+      if (texto) {
+
+        addMsg(
+          texto,
+          'user'
+        );
+      }
+
+      if (imagen) {
+
+        addMsg(
+          '[Imagen enviada]',
+          'user'
+        );
+      }
+
+      input.value = '';
+
+      setEstado(
+        'PROCESANDO',
+        'thinking'
+      );
+
+      try {
+
+        var body = {
+
+          mensaje:
+            texto || '',
+
+          sessionId:
+            sessionId,
+
+          userId:
+            'default'
+        };
+
+        if (
+          imagen &&
+          mimeType
+        ) {
+
+          body.imagen =
+            imagen;
+
+          body.mimeType =
+            mimeType;
+        }
+
+        var res =
+          await fetch(
+            '/chat',
+            {
+              method: 'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json'
+              },
+
+              body:
+                JSON.stringify(body)
+            }
+          );
+
+        var data =
+          await res.json();
+
+        if (!res.ok) {
+
+          throw new Error(
+            data.error ||
+            'Error del servidor'
+          );
+        }
+
+        var parsed =
+          parseAgent(
+            data.respuesta || ''
+          );
+
+        var agente =
+          data.agente ||
+          parsed.agent;
+
+        addMsg(
+          parsed.text,
+          'bot',
+          agente,
+          data.fuentes || []
+        );
+
+        setEstado(
+          'HABLANDO',
+          'speaking'
+        );
+
+        await hablar(
+          parsed.text
+        );
+
+        setEstado(
+          'CALMADO',
+          null
+        );
+
+      } catch (e) {
+
+   
