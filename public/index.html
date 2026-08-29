@@ -1155,6 +1155,77 @@
           null
         );
 
+      } catch (e) {        addMsg(
+          'Error: ' + e.message,
+          'bot',
+          'Sistema'
+        );
+
+        setEstado(
+          'CALMADO',
+          null
+        );
+      }
+    }
+
+    async function hablar(texto) {
+      if (!texto) return;
+
+      try {
+        var res = await fetch('/tts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            texto: texto.slice(0, 800)
+          })
+        });
+
+        if (!res.ok) return;
+
+        var blob = await res.blob();
+        var url = URL.createObjectURL(blob);
+        var audio = new Audio(url);
+
+        await new Promise(function(resolve) {
+          audio.onended = function() {
+            URL.revokeObjectURL(url);
+            resolve();
+          };
+
+          audio.onerror = resolve;
+
+          audio.play().catch(resolve);
+        });
+
       } catch (e) {
+        console.error('Error TTS:', e);
+      }
+    }
+
+    /* =========================================================
+       BOTÓN ENVIAR
+       ========================================================= */
+
+    if (btnSend) {
+      btnSend.addEventListener(
+        'click',
+        function() {
+          enviar(input ? input.value : '');
+        }
+      );
+    }
+
+    if (input) {
+      input.addEventListener(
+        'keydown',
+        function(e) {
+          if (e.key === 'Enter') {
+            enviar(input.value);
+          }
+        }
+      );
+    }
 
    
