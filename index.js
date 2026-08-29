@@ -569,4 +569,45 @@ app.post('/tts', limitador, async function(req, res) {
     if (!texto || typeof texto !== 'string') {
       return res.status(400).json({ error: 'Falta el texto.' });
     }
-    
+  var resultado = await groq.audio.speech.create({
+      model: MODELO_TTS,
+      voice: VOZ_TTS,
+      input: texto.trim().slice(0, 1000),
+      response_format: 'wav'
+    });
+    var buffer = Buffer.from(await resultado.arrayBuffer());
+    res.set('Content-Type', 'audio/wav');
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error TTS:', error);
+    res.status(500).json({ error: 'No pude generar el audio.' });
+  }
+});
+
+app.get('/health', function(req, res) {
+  res.json({
+    status: 'ok',
+    ia: NOMBRE_IA,
+    version: '1.4.0',
+    agentes: Object.keys(AGENTES),
+    groq: Boolean(GROQ_API_KEY),
+    tavily: Boolean(TAVILY_API_KEY)
+  });
+});
+
+app.get('*', function(req, res) {
+  var indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) res.sendFile(indexPath);
+  else res.json({ ia: NOMBRE_IA, mensaje: 'Yarvis online' });
+});
+
+app.use(function(err, req, res, next) {
+  console.error('Error del servidor:', err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Error interno del servidor.' });
+});
+
+app.listen(PORT, '0.0.0.0', function() {
+  console.log(NOMBRE_IA + ' puerto ' + PORT);
+  console.log('Agentes: ' + Object.keys(AGENTES).join(', '));
+});
