@@ -1576,7 +1576,166 @@ function parseAgent(respuesta){
   }
 
   console.log('✓ Botón Enviar conectado correctamente.');})();
-</script>
 
+<script>
+(function () {
+
+  var boton = document.getElementById('btnSend');
+  var campo = document.getElementById('input');
+  var chatBox = document.getElementById('chat');
+  var estado = document.getElementById('status');
+  var core = document.getElementById('core');
+
+  if (!boton || !campo) {
+    console.error('YARVIS: no se encontró el botón o el campo');
+    return;
+  }
+
+  async function enviarReparado() {
+
+    var texto = campo.value.trim();
+
+    if (!texto) return;
+
+    /* Mostrar mensaje del usuario */
+    if (typeof addMsg === 'function') {
+      addMsg(texto, 'user');
+    }
+
+    campo.value = '';
+
+    if (estado) {
+      estado.textContent = 'PROCESANDO';
+    }
+
+    if (core) {
+      core.classList.add('thinking');
+    }
+
+    try {
+
+      var sid =
+        localStorage.getItem('yarvis_sid') ||
+        (
+          Date.now() +
+          '_' +
+          Math.random().toString(36).slice(2)
+        );
+
+      localStorage.setItem('yarvis_sid', sid);
+
+      var respuesta = await fetch('/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          mensaje: texto,
+          sessionId: 'web_' + sid,
+          userId:
+            localStorage.getItem('yarvis_user_id') ||
+            'default'
+        })
+      });
+
+      var data = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          data.error || 'Error del servidor'
+        );
+      }
+
+      var textoRespuesta =
+        data.respuesta || 'No recibí respuesta.';
+
+      var agente =
+        data.agente || 'Yarvis';
+
+      if (typeof addMsg === 'function') {
+
+        addMsg(
+          textoRespuesta,
+          'bot',
+          agente,
+          data.fuentes || []
+        );
+
+      }
+
+      if (estado) {
+        estado.textContent = 'HABLANDO';
+      }
+
+      if (typeof hablar === 'function') {
+        await hablar(textoRespuesta);
+      }
+
+      if (estado) {
+        estado.textContent = 'Listo';
+      }
+
+      if (core) {
+        core.classList.remove('thinking');
+      }
+
+    } catch (error) {
+
+      console.error(
+        'YARVIS ERROR:',
+        error
+      );
+
+      if (typeof addMsg === 'function') {
+
+        addMsg(
+          'Error: ' + error.message,
+          'bot',
+          'Sistema'
+        );
+
+      }
+
+      if (estado) {
+        estado.textContent = 'ERROR';
+      }
+
+      if (core) {
+        core.classList.remove('thinking');
+      }
+
+    }
+
+  }
+
+  /* BOTÓN ➤ */
+  boton.onclick = function (e) {
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    enviarReparado();
+
+  };
+
+  /* ENTER */
+  campo.onkeydown = function (e) {
+
+    if (e.key === 'Enter') {
+
+      e.preventDefault();
+
+      enviarReparado();
+
+    }
+
+  };
+
+  console.log(
+    '✓ Sistema de envío de Yarvis reparado'
+  );
+
+})();
+</script>
 </body>
 </html>
