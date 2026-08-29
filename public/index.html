@@ -1290,7 +1290,7 @@ Listo
   <!-- ============================================================
        FIN PARTE 2
        ============================================================ -->
-     <!-- ============================================================
+  !-- ============================================================
        PARTE 3 — ACCIONES INTELIGENTES DEL COPILOTO
        ============================================================ -->
 
@@ -1384,101 +1384,6 @@ Listo
               cerrarCopiloto();
 
               input.focus();
+    q
 
-              /*
-               * En móvil mostramos el teclado
-               * después de seleccionar la acción.
-               */
 
-              setTimeout(
-                function() {
-
-                  try {
-
-                    input.focus();
-
-                  } catch (e) {}
-
-                },
-                100
-              );
-
-            }
-          );
-
-        }
-      );
-
-      /*
-       * Cerrar el copiloto al tocar
-       * fuera de su ventana.
-       */
-
-      document.addEventListener(
-        'click',
-        function(e) {
-
-          if (
-            !copilotoPanel.classList.contains(
-              'abierto'
-            )
-          ) {
-            return;
-          }
-
-          if (
-            copilotoPanel.contains(e.target) ||
-            copilotoBtn.contains(e.target)
-          ) {
-            return;
-          }
-
-          cerrarCopiloto();
-
-        }
-      );
-
-      /*
-       * Tecla Escape para cerrar.
-       */
-
-      document.addEventListener(
-        'keydown',
-        function(e) {
-
-          if (
-            e.key === 'Escape'
-          ) {
-
-            cerrarCopiloto();
-
-          }
-
-        }
-      );
-
-      /*
-       * Mensaje inicial del copiloto.
-       */
-
-      if (
-        copilotoContenido &&
-        !copilotoContenido.dataset.iniciado
-      ) {
-
-        copilotoContenido.dataset.iniciado =
-          'true';
-
-      }
-
-    })();
-  </script>
-
-  <!-- ============================================================
-       FIN PARTE 3
-       ============================================================ -->
-  <!-- FIN PARTE 3 --
-  </script>
-
-  </body>
-  </html>
