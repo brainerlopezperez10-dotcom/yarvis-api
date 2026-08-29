@@ -1540,7 +1540,42 @@ function parseAgent(respuesta){
     '✓ Yarvis Copiloto cargado correctamente.'
   );
 
-})();
+  /* =========================================================
+     REPARACIÓN DEL BOTÓN ENVIAR
+     ========================================================= */
+
+  if (btnSend && input) {
+
+    btnSend.onclick = function () {
+      var texto = input.value.trim();
+
+      if (!texto) {
+        return;
+      }
+
+      enviar(texto);
+    };
+
+    input.onkeydown = function (e) {
+
+      if (e.key === 'Enter') {
+
+        e.preventDefault();
+
+        var texto = input.value.trim();
+
+        if (!texto) {
+          return;
+        }
+
+        enviar(texto);
+      }
+
+    };
+
+  }
+
+  console.log('✓ Botón Enviar conectado correctamente.');})();
 </script>
 
 </body>
