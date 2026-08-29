@@ -1331,3 +1331,217 @@ function parseAgent(respuesta){
       );
 
     });
+    /* =========================================================
+     NOTAS
+     ========================================================= */
+
+  async function cargarNotasCopiloto() {
+
+    mostrarContenidoCopiloto(
+      '<div class="copilotoVacio">' +
+      '📝 Cargando notas...' +
+      '</div>'
+    );
+
+    try {
+
+      var userId =
+        localStorage.getItem(
+          'yarvis_user_id'
+        ) || 'default';
+
+      var respuesta =
+        await fetch(
+          '/notes?userId=' +
+          encodeURIComponent(userId)
+        );
+
+      var data =
+        await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          data.error || 'Error'
+        );
+      }
+
+      var notas =
+        data.notes || [];
+
+      if (!notas.length) {
+
+        mostrarContenidoCopiloto(
+          '<div class="copilotoVacio">' +
+          'No tienes notas guardadas.' +
+          '</div>'
+        );
+
+        return;
+      }
+
+      var html = '';
+
+      notas
+        .slice(-10)
+        .reverse()
+        .forEach(function (item) {
+
+          html +=
+            '<div class="copilotoItem">' +
+            '<strong>📝</strong> ' +
+            escaparHTML(
+              item.text || ''
+            ) +
+            '</div>';
+
+        });
+
+      mostrarContenidoCopiloto(html);
+
+    } catch (error) {
+
+      console.error(
+        'Error notas:',
+        error
+      );
+
+      mostrarContenidoCopiloto(
+        '<div class="copilotoVacio">' +
+        'No se pudieron cargar las notas.' +
+        '</div>'
+      );
+
+    }
+
+  }
+
+
+  /* =========================================================
+     AYUDA
+     ========================================================= */
+
+  function mostrarAyudaCopiloto() {
+
+    mostrarContenidoCopiloto(
+      '<div class="copilotoItem">' +
+      '<strong>YARVIS — AYUDA</strong>' +
+      '<br><br>' +
+
+      '<b>/atlas</b> — Investigar en Internet<br>' +
+      '<b>/code</b> — Programación<br>' +
+      '<b>/nova</b> — Creatividad e ideas<br>' +
+      '<b>/lumen</b> — Explicaciones<br>' +
+      '<b>/resumen</b> — Resumir conversación<br>' +
+      '<b>/formal</b> — Tono formal<br>' +
+      '<b>/casual</b> — Tono casual<br>' +
+      '<b>/tecnico</b> — Tono técnico<br>' +
+      '<b>/breve</b> — Respuestas breves' +
+
+      '</div>'
+    );
+
+  }
+
+
+  /* =========================================================
+     ACCIONES DEL COPILOTO
+     ========================================================= */
+
+  document
+    .querySelectorAll(
+      '[data-copiloto-action]'
+    )
+    .forEach(function (boton) {
+
+      boton.addEventListener(
+        'click',
+        function (evento) {
+
+          evento.stopPropagation();
+
+          var accion =
+            boton.getAttribute(
+              'data-copiloto-action'
+            );
+
+          if (accion === 'nuevo') {
+
+            nuevaConversacionCopiloto();
+
+          }
+
+          else if (accion === 'memoria') {
+
+            cargarMemoriaCopiloto();
+
+          }
+
+          else if (accion === 'notas') {
+
+            cargarNotasCopiloto();
+
+          }
+
+          else if (accion === 'ayuda') {
+
+            mostrarAyudaCopiloto();
+
+          }
+
+        }
+      );
+
+    });
+
+
+  /* =========================================================
+     CERRAR AL TOCAR FUERA
+     ========================================================= */
+
+  document.addEventListener(
+    'click',
+    function (evento) {
+
+      if (
+        !copiloto ||
+        !panelCopiloto ||
+        !panelCopiloto.classList.contains('abierto')
+      ) {
+        return;
+      }
+
+      if (
+        !copiloto.contains(
+          evento.target
+        )
+      ) {
+
+        panelCopiloto.classList.remove(
+          'abierto'
+        );
+
+      }
+
+    }
+  );
+
+
+  /* =========================================================
+     INICIO DEL COPILOTO
+     ========================================================= */
+
+  mostrarContenidoCopiloto(
+    '<div class="copilotoVacio">' +
+    'Yarvis Copiloto listo.' +
+    '</div>'
+  );
+
+  console.log(
+    '✓ Yarvis Copiloto cargado correctamente.'
+  );
+
+})();
+</script>
+
+</body>
+</html>
