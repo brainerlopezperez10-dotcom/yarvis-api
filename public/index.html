@@ -1419,3 +1419,456 @@ button.icon:active{transform:scale(.92)}
       );
     }
   }
+    /* =========================================================
+       COPILOTO FLOTANTE
+       ========================================================= */
+
+    var copiloto = document.getElementById('copilotoFlotante');
+
+    if (!copiloto) {
+      copiloto = document.createElement('div');
+      copiloto.id = 'copilotoFlotante';
+
+      copiloto.innerHTML = `
+        <button id="btnCopiloto" type="button" aria-label="Abrir copiloto">✦</button>
+
+        <div id="copilotoPanel">
+          <div class="copilotoTitulo">
+            <div>
+              <strong>YARVIS</strong>
+              <span>Copiloto</span>
+            </div>
+            <button id="cerrarCopiloto" type="button">×</button>
+          </div>
+
+          <div class="copilotoAcciones">
+            <button type="button" data-copiloto-action="nuevo">
+              <span>＋</span>
+              <b>Nueva conversación</b>
+            </button>
+
+            <button type="button" data-copiloto-action="memoria">
+              <span>🧠</span>
+              <b>Mi memoria</b>
+            </button>
+
+            <button type="button" data-copiloto-action="notas">
+              <span>📝</span>
+              <b>Mis notas</b>
+            </button>
+
+            <button type="button" data-copiloto-action="ayuda">
+              <span>?</span>
+              <b>Ayuda</b>
+            </button>
+          </div>
+
+          <div id="copilotoContenido"></div>
+        </div>
+      `;
+
+      document.body.appendChild(copiloto);
+    }
+
+    if (!document.getElementById('estilosCopiloto')) {
+      var estiloCopiloto = document.createElement('style');
+      estiloCopiloto.id = 'estilosCopiloto';
+
+      estiloCopiloto.textContent = `
+        #copilotoFlotante {
+          position: fixed;
+          right: 14px;
+          bottom: 82px;
+          z-index: 99999;
+          font-family: system-ui, sans-serif;
+        }
+
+        #btnCopiloto {
+          width: 54px;
+          height: 54px;
+          border: 1px solid rgba(0,220,255,.5);
+          border-radius: 50%;
+          background: radial-gradient(
+            circle at 35% 30%,
+            #e0ffff,
+            #00d4ff 35%,
+            #0066aa 70%,
+            #001428
+          );
+          color: white;
+          font-size: 25px;
+          box-shadow:
+            0 0 15px #00dfff,
+            0 0 30px rgba(0,180,255,.6);
+          cursor: pointer;
+        }
+
+        #btnCopiloto:active {
+          transform: scale(.9);
+        }
+
+        #copilotoPanel {
+          position: absolute;
+          right: 0;
+          bottom: 66px;
+          width: min(310px, calc(100vw - 24px));
+          padding: 12px;
+          border-radius: 20px;
+          border: 1px solid rgba(0,210,255,.3);
+          background: rgba(0,15,25,.97);
+          box-shadow:
+            0 0 25px rgba(0,190,255,.25),
+            0 15px 45px rgba(0,0,0,.7);
+          backdrop-filter: blur(15px);
+          -webkit-backdrop-filter: blur(15px);
+          opacity: 0;
+          visibility: hidden;
+          transform: translateY(10px);
+          transition: .2s ease;
+        }
+
+        #copilotoPanel.abierto {
+          opacity: 1;
+          visibility: visible;
+          transform: translateY(0);
+        }
+
+        .copilotoTitulo {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 10px;
+        }
+
+        .copilotoTitulo strong {
+          display: block;
+          color: #7df9ff;
+          letter-spacing: .12em;
+        }
+
+        .copilotoTitulo span {
+          display: block;
+          color: #5a9aaa;
+          font-size: .65rem;
+        }
+
+        #cerrarCopiloto {
+          width: 30px;
+          height: 30px;
+          border: 0;
+          border-radius: 50%;
+          background: rgba(255,255,255,.08);
+          color: white;
+          font-size: 20px;
+        }
+
+        .copilotoAcciones {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+
+        .copilotoAcciones button {
+          min-height: 68px;
+          border-radius: 14px;
+          border: 1px solid rgba(0,190,255,.22);
+          background: rgba(0,55,75,.5);
+          color: #dffaff;
+          padding: 8px;
+          text-align: left;
+        }
+
+        .copilotoAcciones button:active {
+          transform: scale(.96);
+        }
+
+        .copilotoAcciones button span {
+          display: block;
+          font-size: 20px;
+          margin-bottom: 4px;
+        }
+
+        .copilotoAcciones button b {
+          display: block;
+          font-size: .68rem;
+          font-weight: 500;
+        }
+
+        #copilotoContenido {
+          margin-top: 10px;
+          max-height: 190px;
+          overflow-y: auto;
+          color: #a8d8e3;
+          font-size: .75rem;
+          line-height: 1.45;
+        }
+
+        .copilotoItem {
+          padding: 9px;
+          margin-bottom: 6px;
+          border-radius: 10px;
+          background: rgba(0,70,90,.3);
+          border: 1px solid rgba(0,180,255,.12);
+        }
+
+        .copilotoItem strong {
+          color: #7df9ff;
+        }
+
+        .copilotoVacio {
+          padding: 10px;
+          text-align: center;
+          color: #63909d;
+        }
+
+        @media (max-width: 380px) {
+          #copilotoFlotante {
+            right: 8px;
+          }
+
+          #copilotoPanel {
+            width: calc(100vw - 16px);
+          }
+        }
+      `;
+
+      document.head.appendChild(estiloCopiloto);
+    }
+
+    var btnCopiloto = document.getElementById('btnCopiloto');
+    var panelCopiloto = document.getElementById('copilotoPanel');
+    var cerrarCopiloto = document.getElementById('cerrarCopiloto');
+    var contenidoCopiloto = document.getElementById('copilotoContenido');
+
+    if (btnCopiloto && panelCopiloto) {
+      btnCopiloto.addEventListener('click', function(e) {
+        e.stopPropagation();
+        panelCopiloto.classList.toggle('abierto');
+      });
+    }
+
+    if (cerrarCopiloto && panelCopiloto) {
+      cerrarCopiloto.addEventListener('click', function(e) {
+        e.stopPropagation();
+        panelCopiloto.classList.remove('abierto');
+      });
+    }
+
+    function mostrarContenidoCopiloto(html) {
+      if (contenidoCopiloto) {
+        contenidoCopiloto.innerHTML = html;
+      }
+    }
+
+    function escaparHTML(texto) {
+      return String(texto || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function nuevaConversacionCopiloto() {
+      if (!window.confirm('¿Quieres comenzar una nueva conversación?')) {
+        return;
+      }
+
+      if (chat) {
+        chat.innerHTML = '';
+      }
+
+      var nuevoSid =
+        Date.now() + '_' +
+        Math.random().toString(36).slice(2);
+
+      localStorage.setItem('yarvis_sid', nuevoSid);
+
+      sessionId = 'web_' + nuevoSid;
+
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+
+      if (typeof addMsg === 'function') {
+        addMsg(
+          'Nueva conversación iniciada.',
+          'bot',
+          'Copiloto'
+        );
+      }
+
+      mostrarContenidoCopiloto(
+        '<div class="copilotoVacio">Nueva conversación lista.</div>'
+      );
+    }
+
+    async function cargarMemoriaCopiloto() {
+      mostrarContenidoCopiloto(
+        '<div class="copilotoVacio">🧠 Cargando memoria...</div>'
+      );
+
+      try {
+        var res = await fetch(
+          '/memory?userId=' +
+          encodeURIComponent(
+            localStorage.getItem('yarvis_user_id') || 'default'
+          )
+        );
+
+        var data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Error');
+        }
+
+        var lista = data.memories || [];
+
+        if (!lista.length) {
+          mostrarContenidoCopiloto(
+            '<div class="copilotoVacio">' +
+            'Yarvis todavía no tiene recuerdos guardados.' +
+            '</div>'
+          );
+          return;
+        }
+
+        var html = '';
+
+        lista.slice(-10).reverse().forEach(function(item) {
+          html +=
+            '<div class="copilotoItem">' +
+            '<strong>🧠</strong> ' +
+            escaparHTML(item.text) +
+            '</div>';
+        });
+
+        mostrarContenidoCopiloto(html);
+
+      } catch (error) {
+        mostrarContenidoCopiloto(
+          '<div class="copilotoVacio">' +
+          'No se pudo cargar la memoria.' +
+          '</div>'
+        );
+      }
+    }
+
+    async function cargarNotasCopiloto() {
+      mostrarContenidoCopiloto(
+        '<div class="copilotoVacio">📝 Cargando notas...</div>'
+      );
+
+      try {
+        var res = await fetch(
+          '/notes?userId=' +
+          encodeURIComponent(
+            localStorage.getItem('yarvis_user_id') || 'default'
+          )
+        );
+
+        var data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Error');
+        }
+
+        var lista = data.notes || [];
+
+        if (!lista.length) {
+          mostrarContenidoCopiloto(
+            '<div class="copilotoVacio">' +
+            'No tienes notas guardadas.' +
+            '</div>'
+          );
+          return;
+        }
+
+        var html = '';
+
+        lista.slice(-10).reverse().forEach(function(item) {
+          html +=
+            '<div class="copilotoItem">' +
+            '<strong>📝</strong> ' +
+            escaparHTML(item.text) +
+            '</div>';
+        });
+
+        mostrarContenidoCopiloto(html);
+
+      } catch (error) {
+        mostrarContenidoCopiloto(
+          '<div class="copilotoVacio">' +
+          'No se pudieron cargar las notas.' +
+          '</div>'
+        );
+      }
+    }
+
+    function mostrarAyudaCopiloto() {
+      mostrarContenidoCopiloto(
+        '<div class="copilotoItem">' +
+        '<strong>Comandos de Yarvis</strong><br><br>' +
+        '/atlas — investigar en Internet<br>' +
+        '/code — programar<br>' +
+        '/nova — creatividad<br>' +
+        '/lumen — explicar<br>' +
+        '/resumen — resumir<br>' +
+        '/formal — tono formal<br>' +
+        '/casual — tono casual' +
+        '</div>'
+      );
+    }
+
+    document.querySelectorAll(
+      '[data-copiloto-action]'
+    ).forEach(function(boton) {
+
+      boton.addEventListener('click', function(e) {
+        e.stopPropagation();
+
+        var accion =
+          boton.getAttribute('data-copiloto-action');
+
+        if (accion === 'nuevo') {
+          nuevaConversacionCopiloto();
+        }
+
+        if (accion === 'memoria') {
+          cargarMemoriaCopiloto();
+        }
+
+        if (accion === 'notas') {
+          cargarNotasCopiloto();
+        }
+
+        if (accion === 'ayuda') {
+          mostrarAyudaCopiloto();
+        }
+      });
+
+    });
+
+    document.addEventListener('click', function(e) {
+      if (
+        copiloto &&
+        panelCopiloto &&
+        panelCopiloto.classList.contains('abierto') &&
+        !copiloto.contains(e.target)
+      ) {
+        panelCopiloto.classList.remove('abierto');
+      }
+    });
+
+    mostrarEstado('Listo');
+
+    console.log(
+      'Yarvis: Copiloto cargado correctamente.'
+    );
+
+  })();
+</script>
+
+</body>
+</html>
