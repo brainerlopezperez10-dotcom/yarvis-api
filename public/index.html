@@ -813,3 +813,609 @@ button.icon:active{transform:scale(.92)}
       }
     }
   );
+<script>
+(function () {
+  'use strict';
+
+  var chat = document.getElementById('chat');
+  var input = document.getElementById('input');
+  var btnSend = document.getElementById('btnSend');
+  var btnMic = document.getElementById('btnMic');
+  var btnImg = document.getElementById('btnImg');
+  var fileImg = document.getElementById('fileImg');
+  var core = document.getElementById('core');
+  var statusEl = document.getElementById('status');
+  var estadoLabel = document.getElementById('estadoLabel');
+
+  var sid = localStorage.getItem('yarvis_sid');
+
+  if (!sid) {
+    sid = Date.now() + '_' + Math.random().toString(36).slice(2);
+    localStorage.setItem('yarvis_sid', sid);
+  }
+
+  var sessionId = 'web_' + sid;
+
+  function setEstado(nombre, clase) {
+    if (estadoLabel) estadoLabel.textContent = nombre;
+    if (statusEl) statusEl.textContent = nombre;
+
+    if (core) {
+      core.classList.remove(
+        'listening',
+        'thinking',
+        'speaking'
+      );
+
+      if (clase) {
+        core.classList.add(clase);
+      }
+    }
+  }
+
+  function addMsg(text, who, agentName, fuentes) {
+    if (!chat) return;
+
+    var div = document.createElement('div');
+    div.className = 'msg ' + who;
+
+    if (agentName && who === 'bot') {
+      var ag = document.createElement('span');
+      ag.className = 'agent';
+      ag.textContent = agentName;
+      div.appendChild(ag);
+    }
+
+    div.appendChild(
+      document.createTextNode(text || '')
+    );
+
+    if (fuentes && fuentes.length) {
+      var box = document.createElement('div');
+      box.className = 'fuentes';
+
+      box.appendChild(
+        document.createTextNode('Fuentes:')
+      );
+
+      fuentes.forEach(function (f, i) {
+        var a = document.createElement('a');
+
+        a.href = f.url || '#';
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent =
+          (i + 1) + '. ' +
+          (f.titulo || f.url || 'Fuente');
+
+        box.appendChild(a);
+      });
+
+      div.appendChild(box);
+    }
+
+    chat.appendChild(div);
+
+    setTimeout(function () {
+      chat.scrollTop = chat.scrollHeight;
+    }, 20);
+  }
+
+  function parseAgent(respuesta) {
+    var texto = respuesta || '';
+
+    var m = texto.match(
+      /^([A-Za-zÁÉÍÓÚáéíóúñÑ]+):\s*\n\n?([\s\S]*)$/
+    );
+
+    if (m) {
+      return {
+        agent: m[1],
+        text: m[2].trim()
+      };
+    }
+
+    return {
+      agent: 'Yarvis',
+      text: texto
+    };
+  }
+
+  async function enviar(texto, imagen, mimeType) {
+    texto = (texto || '').trim();
+
+    if (!texto && !imagen) return;
+
+    if (texto) {
+      addMsg(texto, 'user');
+    }
+
+    if (imagen) {
+      addMsg('[Imagen enviada]', 'user');
+    }
+
+    input.value = '';
+
+    setEstado('PROCESANDO', 'thinking');
+
+    try {
+      var body = {
+        mensaje: texto,
+        sessionId: sessionId,
+        userId: localStorage.getItem(
+          'yarvis_user_id'
+        ) || 'default'
+      };
+
+      if (imagen) {
+        body.imagen = imagen;
+        body.mimeType =
+          mimeType || 'image/jpeg';
+      }
+
+      var res = await fetch('/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      var data;
+
+      try {
+        data = await res.json();
+      } catch (e) {
+        throw new Error(
+          'El servidor no devolvió una respuesta válida.'
+        );
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          data.error ||
+          'Error del servidor: ' +
+          res.status
+        );
+      }
+
+      var parsed = parseAgent(
+        data.respuesta || ''
+      );
+
+      addMsg(
+        parsed.text,
+        'bot',
+        data.agente || parsed.agent,
+        data.fuentes || []
+      );
+
+      setEstado(
+        'HABLANDO',
+        'speaking'
+      );
+
+      await hablar(parsed.text);
+
+      setEstado(
+        'CALMADO',
+        null
+      );
+
+    } catch (error) {
+      console.error(
+        'Error enviando mensaje:',
+        error
+      );
+
+      addMsg(
+        'Error: ' +
+        (error.message ||
+          'No se pudo conectar con Yarvis.'),
+        'bot',
+        'Sistema'
+      );
+
+      setEstado(
+        'CALMADO',
+        null
+      );
+    }
+  }
+
+  async function hablar(texto) {
+    if (!texto) return;
+
+    try {
+      var res = await fetch('/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          texto: texto.slice(0, 800)
+        })
+      });
+
+      if (!res.ok) return;
+
+      var blob = await res.blob();
+      var url = URL.createObjectURL(blob);
+      var audio = new Audio(url);
+
+      await new Promise(function (resolve) {
+
+        audio.onended = function () {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+
+        audio.onerror = function () {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+
+        var promesa = audio.play();
+
+        if (promesa) {
+          promesa.catch(function () {
+            resolve();
+          });
+        }
+      });
+
+    } catch (e) {
+      console.warn(
+        'TTS no disponible:',
+        e.message
+      );
+    }
+  }
+
+  if (btnSend) {
+    btnSend.addEventListener(
+      'click',
+      function () {
+        enviar(input.value);
+      }
+    );
+  }
+
+  if (input) {
+    input.addEventListener(
+      'keydown',
+      function (e) {
+
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          enviar(input.value);
+        }
+
+      }
+    );
+  }
+
+  document
+    .querySelectorAll('.hint')
+    .forEach(function (el) {
+
+      el.addEventListener(
+        'click',
+        function () {
+
+          input.value =
+            el.getAttribute(
+              'data-cmd'
+            ) || '';
+
+          input.focus();
+
+        }
+      );
+
+    });
+
+  if (btnImg && fileImg) {
+
+    btnImg.addEventListener(
+      'click',
+      function () {
+        fileImg.click();
+      }
+    );
+
+    fileImg.addEventListener(
+      'change',
+      function () {
+
+        var file =
+          fileImg.files &&
+          fileImg.files[0];
+
+        if (!file) return;
+
+        var reader =
+          new FileReader();
+
+        reader.onload = function () {
+
+          var resultado =
+            reader.result || '';
+
+          var partes =
+            resultado.split(',');
+
+          var base64 =
+            partes[1] || '';
+
+          var mime =
+            file.type ||
+            'image/jpeg';
+
+          var pregunta =
+            input.value.trim() ||
+            '¿Qué ves en esta imagen?';
+
+          enviar(
+            pregunta,
+            base64,
+            mime
+          );
+
+          fileImg.value = '';
+
+        };
+
+        reader.readAsDataURL(file);
+
+      }
+    );
+  }
+
+  var mediaRecorder = null;
+  var chunks = [];
+  var recording = false;
+
+  if (btnMic) {
+
+    btnMic.addEventListener(
+      'click',
+      async function () {
+
+        if (recording) {
+          detenerGrabacion();
+          return;
+        }
+
+        try {
+
+          if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+          ) {
+            throw new Error(
+              'El navegador no permite usar el micrófono.'
+            );
+          }
+
+          var stream =
+            await navigator.mediaDevices
+              .getUserMedia({
+                audio: true
+              });
+
+          chunks = [];
+
+          var tipoAudio =
+            'audio/webm';
+
+          if (
+            typeof MediaRecorder !==
+            'undefined' &&
+            MediaRecorder.isTypeSupported &&
+            MediaRecorder.isTypeSupported(
+              'audio/webm;codecs=opus'
+            )
+          ) {
+            tipoAudio =
+              'audio/webm;codecs=opus';
+          }
+
+          mediaRecorder =
+            new MediaRecorder(
+              stream,
+              {
+                mimeType: tipoAudio
+              }
+            );
+
+          mediaRecorder.ondataavailable =
+            function (e) {
+
+              if (
+                e.data &&
+                e.data.size > 0
+              ) {
+                chunks.push(e.data);
+              }
+
+            };
+
+          mediaRecorder.onstop =
+            async function () {
+
+              stream
+                .getTracks()
+                .forEach(function (track) {
+                  track.stop();
+                });
+
+              var blob =
+                new Blob(
+                  chunks,
+                  {
+                    type: tipoAudio
+                  }
+                );
+
+              await transcribir(blob);
+
+            };
+
+          mediaRecorder.start();
+
+          recording = true;
+
+          btnMic.classList.add(
+            'recording'
+          );
+
+          setEstado(
+            'ESCUCHANDO',
+            'listening'
+          );
+
+        } catch (error) {
+
+          console.error(
+            'Error del micrófono:',
+            error
+          );
+
+          alert(
+            'Permite el micrófono en el navegador.'
+          );
+
+          setEstado(
+            'CALMADO',
+            null
+          );
+
+        }
+
+      }
+    );
+  }
+
+  function detenerGrabacion() {
+
+    if (
+      mediaRecorder &&
+      recording
+    ) {
+
+      mediaRecorder.stop();
+
+      recording = false;
+
+      btnMic.classList.remove(
+        'recording'
+      );
+
+      setEstado(
+        'PROCESANDO',
+        'thinking'
+      );
+    }
+  }
+
+  async function transcribir(blob) {
+
+    try {
+
+      var reader =
+        new FileReader();
+
+      var base64 =
+        await new Promise(
+          function (resolve, reject) {
+
+            reader.onload =
+              function () {
+
+                var resultado =
+                  reader.result || '';
+
+                resolve(
+                  resultado.split(',')[1] ||
+                  resultado
+                );
+
+              };
+
+            reader.onerror =
+              reject;
+
+            reader.readAsDataURL(blob);
+
+          }
+        );
+
+      var res =
+        await fetch(
+          '/transcribe',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+            body: JSON.stringify({
+              audio: base64,
+              mimeType:
+                'audio/webm'
+            })
+          }
+        );
+
+      var data =
+        await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data.error ||
+          'Error al transcribir.'
+        );
+      }
+
+      var texto =
+        (data.texto || '').trim();
+
+      if (!texto) {
+
+        addMsg(
+          'No entendí el audio.',
+          'bot',
+          'Sistema'
+        );
+
+        setEstado(
+          'CALMADO',
+          null
+        );
+
+        return;
+      }
+
+      await enviar(texto);
+
+    } catch (error) {
+
+      console.error(
+        'Error de transcripción:',
+        error
+      );
+
+      addMsg(
+        'Error de transcripción: ' +
+        error.message,
+        'bot',
+        'Sistema'
+      );
+
+      setEstado(
+        'CALMADO',
+        null
+      );
+    }
+  }
