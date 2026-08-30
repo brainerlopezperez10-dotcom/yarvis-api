@@ -76,3 +76,740 @@ button.icon:active{transform:scale(.92)}
 <span class="hint" data-cmd="/casual "> /casual</span>
 </div>
 <div id="chat"></div>
+<div id="copiloto">
+  <button id="copilotoBtn" type="button" aria-label="Abrir copiloto">✦</button>
+
+  <div id="copilotoPanel">
+    <div class="copilotoHeader">
+      <div class="copilotoTitulo">YARVIS · COPILOTO</div>
+      <button class="copilotoCerrar" id="copilotoCerrar" type="button">✕</button>
+    </div>
+
+    <div class="copilotoContenido">
+      <div class="copilotoTexto">
+        ¿Qué quieres hacer?
+      </div>
+
+      <div class="copilotoAcciones">
+        <button class="copilotoAccion" type="button" data-copiloto="nuevo">
+          ＋ Nueva conversación
+        </button>
+
+        <button class="copilotoAccion" type="button" data-copiloto="memoria">
+          🧠 Mi memoria
+        </button>
+
+        <button class="copilotoAccion" type="button" data-copiloto="notas">
+          📝 Mis notas
+        </button>
+
+        <button class="copilotoAccion" type="button" data-copiloto="ayuda">
+          ❓ Ayuda
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bar">
+  <button class="icon" id="btnMic" type="button" title="Hablar">🎤</button>
+
+  <button class="icon" id="btnImg" type="button" title="Imagen">🖼️</button>
+
+  <input id="fileImg" type="file" accept="image/*">
+
+  <input
+    id="input"
+    type="text"
+    placeholder="Escribe o habla..."
+    autocomplete="off"
+  >
+
+  <button class="icon" id="btnSend" type="button" title="Enviar">➤</button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var chat = document.getElementById('chat');
+  var input = document.getElementById('input');
+  var btnSend = document.getElementById('btnSend');
+  var btnMic = document.getElementById('btnMic');
+  var btnImg = document.getElementById('btnImg');
+  var fileImg = document.getElementById('fileImg');
+  var core = document.getElementById('core');
+  var statusEl = document.getElementById('status');
+  var estadoLabel = document.getElementById('estadoLabel');
+
+  var sid = localStorage.getItem('yarvis_sid');
+
+  if (!sid) {
+    sid = Date.now() + '_' + Math.random().toString(36).slice(2);
+    localStorage.setItem('yarvis_sid', sid);
+  }
+
+  var sessionId = 'web_' + sid;
+
+  function setEstado(nombre, clase) {
+    if (estadoLabel) {
+      estadoLabel.textContent = nombre;
+    }
+
+    if (core) {
+      core.classList.remove(
+        'listening',
+        'thinking',
+        'speaking'
+      );
+
+      if (clase) {
+        core.classList.add(clase);
+      }
+    }
+
+    if (statusEl) {
+      statusEl.textContent = nombre;
+    }
+  }
+
+  function addMsg(text, who, agentName, fuentes) {
+    if (!chat) return;
+
+    var div = document.createElement('div');
+    div.className = 'msg ' + who;
+
+    if (agentName && who === 'bot') {
+      var ag = document.createElement('span');
+      ag.className = 'agent';
+      ag.textContent = agentName;
+      div.appendChild(ag);
+    }
+
+    div.appendChild(
+      document.createTextNode(text || '')
+    );
+
+    if (fuentes && fuentes.length) {
+      var box = document.createElement('div');
+      box.className = 'fuentes';
+
+      box.appendChild(
+        document.createTextNode('Fuentes:')
+      );
+
+      fuentes.forEach(function (f, i) {
+        var a = document.createElement('a');
+
+        a.href = f.url || '#';
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent =
+          (i + 1) + '. ' +
+          (f.titulo || f.url || 'Fuente');
+
+        box.appendChild(a);
+      });
+
+      div.appendChild(box);
+    }
+
+    chat.appendChild(div);
+
+    setTimeout(function () {
+      chat.scrollTop = chat.scrollHeight;
+    }, 30);
+  }
+
+  function parseAgent(respuesta) {
+    var m = String(respuesta || '').match(
+      /^([A-Za-zÁÉÍÓÚáéíóúñÑ]+):\s*\n\n?([\s\S]*)$/
+    );
+
+    if (m) {
+      return {
+        agent: m[1],
+        text: m[2].trim()
+      };
+    }
+
+    return {
+      agent: 'Yarvis',
+      text: respuesta || ''
+    };
+  }
+
+  async function enviar(texto, imagen, mimeType) {
+    texto = String(texto || '').trim();
+
+    if (!texto && !imagen) {
+      return;
+    }
+
+    if (texto) {
+      addMsg(texto, 'user');
+    }
+
+    if (imagen) {
+      addMsg('[Imagen enviada]', 'user');
+    }
+
+    if (input) {
+      input.value = '';
+    }
+
+    setEstado('PROCESANDO', 'thinking');
+
+    try {
+      var body = {
+        mensaje: texto,
+        sessionId: sessionId,
+        userId: 'default'
+      };
+
+      if (imagen && mimeType) {
+        body.imagen = imagen;
+        body.mimeType = mimeType;
+      }
+
+      var res = await fetch('/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      var contenido = await res.text();
+
+      var data;
+
+      try {
+        data = JSON.parse(contenido);
+      } catch (errorJSON) {
+        throw new Error(
+          'El servidor no devolvió JSON válido.'
+        );
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          data.error || 'Error del servidor.'
+        );
+      }
+
+      var parsed = parseAgent(
+        data.respuesta || ''
+      );
+
+      addMsg(
+        parsed.text,
+        'bot',
+        data.agente || parsed.agent,
+        data.fuentes || []
+      );
+
+      setEstado('HABLANDO', 'speaking');
+
+      await hablar(parsed.text);
+
+      setEstado('CALMADO', null);
+
+    } catch (error) {
+
+      console.error('Error /chat:', error);
+
+      addMsg(
+        'Error: ' + error.message,
+        'bot',
+        'Sistema'
+      );
+
+      setEstado('CALMADO', null);
+    }
+  }
+
+  async function hablar(texto) {
+    if (!texto) return;
+
+    try {
+      var res = await fetch('/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          texto: texto.slice(0, 800)
+        })
+      });
+
+      if (!res.ok) return;
+
+      var blob = await res.blob();
+      var url = URL.createObjectURL(blob);
+      var audio = new Audio(url);
+
+      await new Promise(function (resolve) {
+
+        audio.onended = function () {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+
+        audio.onerror = function () {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+
+        audio.play().catch(function () {
+          resolve();
+        });
+
+      });
+
+    } catch (error) {
+      console.warn('TTS no disponible:', error);
+    }
+  }
+
+  if (btnSend) {
+    btnSend.addEventListener(
+      'click',
+      function () {
+        enviar(input ? input.value : '');
+      }
+    );
+  }
+
+  if (input) {
+    input.addEventListener(
+      'keydown',
+      function (e) {
+
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          enviar(input.value);
+        }
+
+      }
+    );
+  }
+
+  document.querySelectorAll('.hint').forEach(
+    function (el) {
+
+      el.addEventListener(
+        'click',
+        function () {
+
+          if (!input) return;
+
+          input.value =
+            el.getAttribute('data-cmd') || '';
+
+          input.focus();
+        }
+      );
+
+    }
+  );
+
+  if (btnImg && fileImg) {
+
+    btnImg.addEventListener(
+      'click',
+      function () {
+        fileImg.click();
+      }
+    );
+
+    fileImg.addEventListener(
+      'change',
+      function () {
+
+        var file =
+          fileImg.files &&
+          fileImg.files[0];
+
+        if (!file) return;
+
+        var reader =
+          new FileReader();
+
+        reader.onload = function () {
+
+          var result =
+            String(reader.result || '');
+
+          var partes =
+            result.split(',');
+
+          var base64 =
+            partes[1] || '';
+
+          var mime =
+            file.type || 'image/jpeg';
+
+          var texto =
+            input && input.value.trim()
+              ? input.value.trim()
+              : 'Que ves en esta imagen?';
+
+          enviar(
+            texto,
+            base64,
+            mime
+          );
+
+          fileImg.value = '';
+        };
+
+        reader.readAsDataURL(file);
+      }
+    );
+  }
+
+  var mediaRecorder = null;
+  var chunks = [];
+  var recording = false;
+
+  if (btnMic) {
+
+    btnMic.addEventListener(
+      'click',
+      async function () {
+
+        if (recording) {
+          stopRec();
+          return;
+        }
+
+        try {
+
+          if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+          ) {
+            throw new Error(
+              'El navegador no permite usar el micrófono.'
+            );
+          }
+
+          var stream =
+            await navigator.mediaDevices.getUserMedia({
+              audio: true
+            });
+
+          chunks = [];
+
+          mediaRecorder =
+            new MediaRecorder(stream);
+
+          mediaRecorder.ondataavailable =
+            function (e) {
+
+              if (e.data && e.data.size > 0) {
+                chunks.push(e.data);
+              }
+
+            };
+
+          mediaRecorder.onstop =
+            async function () {
+
+              stream.getTracks()
+                .forEach(function (track) {
+                  track.stop();
+                });
+
+              var blob =
+                new Blob(
+                  chunks,
+                  { type: 'audio/webm' }
+                );
+
+              await transcribir(blob);
+            };
+
+          mediaRecorder.start();
+
+          recording = true;
+
+          btnMic.classList.add(
+            'recording'
+          );
+
+          setEstado(
+            'ESCUCHANDO',
+            'listening'
+          );
+
+        } catch (error) {
+
+          console.error(
+            'Error micrófono:',
+            error
+          );
+
+          alert(
+            'Permite el micrófono en el navegador.'
+          );
+
+          setEstado(
+            'CALMADO',
+            null
+          );
+        }
+      }
+    );
+  }
+
+  function stopRec() {
+
+    if (
+      mediaRecorder &&
+      recording
+    ) {
+
+      mediaRecorder.stop();
+
+      recording = false;
+
+      if (btnMic) {
+        btnMic.classList.remove(
+          'recording'
+        );
+      }
+
+      setEstado(
+        'PROCESANDO',
+        'thinking'
+      );
+    }
+  }
+
+  async function transcribir(blob) {
+
+    try {
+
+      var reader =
+        new FileReader();
+
+      var base64 =
+        await new Promise(
+          function (resolve, reject) {
+
+            reader.onload = function () {
+
+              var s =
+                String(reader.result || '');
+
+              resolve(
+                s.split(',')[1] || ''
+              );
+            };
+
+            reader.onerror = reject;
+
+            reader.readAsDataURL(blob);
+          }
+        );
+
+      var res =
+        await fetch('/transcribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json'
+          },
+          body: JSON.stringify({
+            audio: base64,
+            mimeType: 'audio/webm'
+          })
+        });
+
+      var data =
+        await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data.error ||
+          'Error al transcribir.'
+        );
+      }
+
+      var texto =
+        String(data.texto || '').trim();
+
+      if (!texto) {
+
+        setEstado(
+          'CALMADO',
+          null
+        );
+
+        return;
+      }
+
+      await enviar(texto);
+
+    } catch (error) {
+
+      console.error(
+        'Error transcripción:',
+        error
+      );
+
+      addMsg(
+        'Error de transcripción: ' +
+        error.message,
+        'bot',
+        'Sistema'
+      );
+
+      setEstado(
+        'CALMADO',
+        null
+      );
+    }
+  }
+
+  var copiloto =
+    document.getElementById('copiloto');
+
+  var copilotoBtn =
+    document.getElementById('copilotoBtn');
+
+  var copilotoPanel =
+    document.getElementById('copilotoPanel');
+
+  var copilotoCerrar =
+    document.getElementById('copilotoCerrar');
+
+  if (copilotoBtn && copilotoPanel) {
+
+    copilotoBtn.addEventListener(
+      'click',
+      function (e) {
+
+        e.stopPropagation();
+
+        copilotoPanel.classList.toggle(
+          'abierto'
+        );
+      }
+    );
+  }
+
+  if (copilotoCerrar) {
+
+    copilotoCerrar.addEventListener(
+      'click',
+      function (e) {
+
+        e.stopPropagation();
+
+        if (copilotoPanel) {
+          copilotoPanel.classList.remove(
+            'abierto'
+          );
+        }
+      }
+    );
+  }
+
+  document
+    .querySelectorAll('[data-copiloto]')
+    .forEach(function (boton) {
+
+      boton.addEventListener(
+        'click',
+        function () {
+
+          var accion =
+            boton.getAttribute(
+              'data-copiloto'
+            );
+
+          if (accion === 'nuevo') {
+
+            var confirmar =
+              confirm(
+                '¿Quieres comenzar una nueva conversación?'
+              );
+
+            if (!confirmar) return;
+
+            chat.innerHTML = '';
+
+            var nuevoSid =
+              Date.now() +
+              '_' +
+              Math.random()
+                .toString(36)
+                .slice(2);
+
+            localStorage.setItem(
+              'yarvis_sid',
+              nuevoSid
+            );
+
+            sessionId =
+              'web_' + nuevoSid;
+
+            addMsg(
+              'Nueva conversación iniciada.',
+              'bot',
+              'Yarvis'
+            );
+
+          } else if (accion === 'memoria') {
+
+            addMsg(
+              'La memoria de Yarvis está disponible desde el servidor.',
+              'bot',
+              'Copiloto'
+            );
+
+          } else if (accion === 'notas') {
+
+            addMsg(
+              'Puedes guardar notas mediante la función de notas del servidor.',
+              'bot',
+              'Copiloto'
+            );
+
+          } else if (accion === 'ayuda') {
+
+            addMsg(
+              'Puedes escribir normalmente o utilizar /atlas, /code, /nova, /lumen, /resumen, /formal o /casual.',
+              'bot',
+              'Copiloto'
+            );
+          }
+
+          if (copilotoPanel) {
+            copilotoPanel.classList.remove(
+              'abierto'
+            );
+          }
+        }
+      );
+    });
+
+  document.addEventListener(
+    'click',
+    function (e) {
+
+      if (
+        copiloto &&
+        copilotoPanel &&
+        !copiloto.contains(e.target)
+      ) {
+
+        copilotoPanel.classList.remove(
+          'abierto'
+        );
+      }
+    }
+  );
