@@ -28,7 +28,7 @@ if (!GROQ_API_KEY) {
 
 const groq = new Groq({ apiKey: GROQ_API_KEY });
 
-const MODELO_TEXTO = 'openai/gpt-oss-20b';
+const MODELO_TEXTO = 'openai/gpt-oss-120b';
 const MODELO_VISION = 'qwen/qwen3.6-27b';
 const MODELO_BUSQUEDA = 'groq/compound';
 const MODELO_STT = 'whisper-large-v3-turbo';
